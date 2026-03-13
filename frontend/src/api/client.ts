@@ -98,6 +98,7 @@ export async function sendMessageStream(
   writerId: string,
   content: string,
   onToken: (token: string) => void,
+  onPhase?: (phase: string) => void,
 ): Promise<{ messageId: number }> {
   const token = localStorage.getItem('token');
   const headers: Record<string, string> = {
@@ -138,6 +139,9 @@ export async function sendMessageStream(
 
       if (data.error) {
         throw new Error(data.error);
+      }
+      if (data.phase && onPhase) {
+        onPhase(data.phase);
       }
       if (data.token) {
         onToken(data.token);

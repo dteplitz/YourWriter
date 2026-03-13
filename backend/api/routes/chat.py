@@ -91,8 +91,11 @@ async def send_message_stream(
         full_response = ""
         try:
             async for chunk in stream_writer_agent(writer, body.content):
-                full_response += chunk
-                yield f"data: {json.dumps({'token': chunk})}\n\n"
+                if isinstance(chunk, dict):
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                else:
+                    full_response += chunk
+                    yield f"data: {json.dumps({'token': chunk})}\n\n"
 
             # Short-lived session: persist assistant response
             async with async_session() as save_db:
