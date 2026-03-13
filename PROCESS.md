@@ -45,19 +45,25 @@ Acceptance criteria:
 - Technical decisions and why (agreed by both)
 - Edge cases considered
 
-### 3. Planning (Tech Lead-driven)
+### 3. Planning (Collaborative)
 **When:** After refinement is approved.
 **What happens:**
-- Tech Lead breaks the story into **tasks** (small, focused, one per agent)
-- Identifies which tasks can run in parallel vs sequential
+- Tech Lead proposes task breakdown and agent assignments
+- Damian reviews and adjusts:
+  - Agent scoping (too broad? too narrow? overlap?)
+  - Parallel vs sequential grouping
+  - Key instructions each agent receives
+  - Risk of mismatches between agents
 - Commits shared contracts to `main` if needed (before agents start)
-- PO confirms the plan
+- Both agree on the plan before any agent launches
 
 **Output:** Task list with:
 - Task description
 - Agent scope (which files/module)
+- Key instructions for the agent
 - Dependencies (what must finish first)
 - Parallel grouping
+- Shared contracts committed (if any)
 
 ### 4. Build (Agents)
 **When:** After planning is confirmed.
