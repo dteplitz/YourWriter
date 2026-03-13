@@ -1,0 +1,19 @@
+"""Prompt templates for YourWriter agents."""
+
+from agents.prompts.system import (
+    CHAT_SYSTEM_PROMPT,
+    WRITER_SYSTEM_PROMPT,
+    EVOLUTION_SYSTEM_PROMPT,
+    OUTLINE_PROMPT,
+    REFINE_PROMPT,
+    CONSTRAINTS_PARSER_PROMPT,
+)
+
+__all__ = [
+    "CHAT_SYSTEM_PROMPT",
+    "WRITER_SYSTEM_PROMPT",
+    "EVOLUTION_SYSTEM_PROMPT",
+    "OUTLINE_PROMPT",
+    "REFINE_PROMPT",
+    "CONSTRAINTS_PARSER_PROMPT",
+]
