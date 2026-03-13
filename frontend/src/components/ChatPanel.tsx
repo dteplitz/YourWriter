@@ -10,6 +10,7 @@ export default function ChatPanel({ writerId }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -18,7 +19,7 @@ export default function ChatPanel({ writerId }: ChatPanelProps) {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, streamingContent]);
 
   const loadHistory = async () => {
     try {
@@ -45,10 +46,31 @@ export default function ChatPanel({ writerId }: ChatPanelProps) {
     setInput('');
     setLoading(true);
 
+    setStreamingContent('');
+
     try {
-      const response = await api.sendMessage(writerId, userMessage.content);
-      setMessages((prev) => [...prev, response]);
+      let accumulated = '';
+      const { messageId } = await api.sendMessageStream(
+        writerId,
+        userMessage.content,
+        (token) => {
+          accumulated += token;
+          setStreamingContent(accumulated);
+        },
+      );
+
+      // Replace streaming placeholder with the final persisted message
+      const finalMessage: ChatMessage = {
+        id: messageId,
+        writer_id: writerId,
+        role: 'assistant',
+        content: accumulated,
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, finalMessage]);
+      setStreamingContent('');
     } catch (err) {
+      setStreamingContent('');
       const errorMsg: ChatMessage = {
         id: crypto.randomUUID(),
         writer_id: writerId,
@@ -91,7 +113,9 @@ export default function ChatPanel({ writerId }: ChatPanelProps) {
         {loading && (
           <div className="chat-message chat-message--assistant">
             <div className="chat-message-role">Writer</div>
-            <div className="chat-message-content chat-typing">Thinking...</div>
+            <div className="chat-message-content">
+              {streamingContent || <span className="chat-typing">Thinking...</span>}
+            </div>
           </div>
         )}
         <div ref={messagesEndRef} />

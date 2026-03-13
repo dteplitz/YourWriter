@@ -6,6 +6,7 @@ identity into the system prompt so responses stay in character.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any
 
 import anthropic
@@ -85,3 +86,20 @@ async def chat_node(state: dict[str, Any]) -> dict[str, Any]:
     updated_messages.append({"role": "assistant", "content": assistant_text})
 
     return {"messages": updated_messages}
+
+
+async def chat_node_stream(state: dict[str, Any]) -> AsyncIterator[str]:
+    """Async generator that yields text chunks from Claude streaming API."""
+    system_prompt = _build_system_prompt(state)
+    messages = _messages_to_anthropic(state.get("messages", []))
+
+    client = anthropic.AsyncAnthropic()
+
+    async with client.messages.stream(
+        model="claude-sonnet-4-20250514",
+        max_tokens=4096,
+        system=system_prompt,
+        messages=messages,
+    ) as stream:
+        async for text in stream.text_stream:
+            yield text
