@@ -109,6 +109,8 @@ Acceptance criteria:
 - What went well?
 - What should we change?
 - Update CLAUDE.md or PROCESS.md if we learn something
+- **Save conventions** — if we discovered a pattern worth keeping (colors, code patterns, error handling), add it to the relevant agent template in `.agents/`
+- **Update agent templates** — if an agent worked well with specific instructions, save those for reuse
 
 ## Artifacts
 
@@ -117,6 +119,7 @@ Acceptance criteria:
 | Product spec | `SPEC.md` | Full product vision and feature list |
 | Dev process | `PROCESS.md` | This file — how we work |
 | Agent guidelines | `CLAUDE.md` | Rules all agents follow |
+| Agent templates | `.agents/*.md` | Reusable agent profiles with saved instructions and conventions |
 | Backlog | Conversation | User stories discussed and prioritized live |
 
 ## Principles
