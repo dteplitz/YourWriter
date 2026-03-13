@@ -9,6 +9,7 @@ the relevant field in WriterState.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any
 
 import anthropic
@@ -108,17 +109,15 @@ async def draft_node(state: dict[str, Any]) -> dict[str, Any]:
 # Refine
 # ---------------------------------------------------------------------------
 
-async def refine_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Polish the draft and enforce constraints.
+def _build_refine_prompt(state: dict[str, Any]) -> tuple[str, str]:
+    """Build the system prompt and user message for the refine step.
 
-    Runs constraint validation first, then asks the LLM to refine the
-    draft — fixing violations and incorporating any user feedback.
+    Returns (system_prompt, user_message).
     """
     identity: dict[str, Any] = state.get("identity", {})
     constraints = identity.get("constraints", {})
     draft = state.get("draft", "")
 
-    # Validate before refining so we can tell the editor what to fix
     validation = validate_constraints(draft, constraints)
     feedback_parts: list[str] = []
 
@@ -133,7 +132,6 @@ async def refine_node(state: dict[str, Any]) -> dict[str, Any]:
             + "\n".join(f"  - {w}" for w in validation["warnings"])
         )
 
-    # Include explicit user feedback if present in the latest message
     user_request = _extract_user_request(state)
     if user_request:
         feedback_parts.append(f"User notes: {user_request}")
@@ -146,9 +144,28 @@ async def refine_node(state: dict[str, Any]) -> dict[str, Any]:
         feedback=feedback_text,
     )
 
-    refined = await _call_claude(
-        system="You are a meticulous editor.  Improve the writing while preserving voice.",
-        user_message=prompt,
+    return (
+        "You are a meticulous editor.  Improve the writing while preserving voice.",
+        prompt,
     )
 
+
+async def refine_node(state: dict[str, Any]) -> dict[str, Any]:
+    """Polish the draft and enforce constraints."""
+    system, user_msg = _build_refine_prompt(state)
+    refined = await _call_claude(system=system, user_message=user_msg)
     return {"refined_content": refined}
+
+
+async def refine_node_stream(state: dict[str, Any]) -> AsyncIterator[str]:
+    """Stream the refine step token-by-token."""
+    system, user_msg = _build_refine_prompt(state)
+    client = anthropic.AsyncAnthropic()
+    async with client.messages.stream(
+        model="claude-sonnet-4-20250514",
+        max_tokens=8192,
+        system=system,
+        messages=[{"role": "user", "content": user_msg}],
+    ) as stream:
+        async for text in stream.text_stream:
+            yield text

@@ -109,20 +109,26 @@ async def invoke_writer_agent(
 async def stream_writer_agent(
     writer: Writer,
     user_message: str,
-) -> AsyncIterator[str]:
-    """Stream the writer agent response as text chunks.
+) -> AsyncIterator[str | dict]:
+    """Stream the writer agent response as text chunks or phase events.
 
     Manages its own short-lived DB session for loading history so the
     caller does not need to hold a connection open during the LLM call.
 
-    Yields text chunks for chat-mode responses. Falls back to a single
-    chunk for write-mode (streaming write pipeline is Sprint 2b).
+    Yields:
+      - str: text token for the client to display
+      - dict: phase event like {"phase": "outlining"}
     """
     if not os.getenv("ANTHROPIC_API_KEY"):
         raise RuntimeError("ANTHROPIC_API_KEY environment variable is not set")
 
     from agents.graphs.writer_graph import detect_intent_node  # noqa: E402
     from agents.nodes.chat_node import chat_node_stream  # noqa: E402
+    from agents.nodes.writing_nodes import (  # noqa: E402
+        outline_node,
+        draft_node,
+        refine_node_stream,
+    )
     from backend.db.database import async_session  # noqa: E402
 
     # Load latest identity
@@ -161,7 +167,15 @@ async def stream_writer_agent(
         async for chunk in chat_node_stream(state):
             yield chunk
     else:
-        # Write mode: fall back to non-streaming (Sprint 2b)
-        async with async_session() as db:
-            response_text = await invoke_writer_agent(db, writer, user_message)
-        yield response_text
+        # Write mode: outline → draft → stream refine
+        yield {"phase": "outlining"}
+        outline_result = await outline_node(state)
+        state.update(outline_result)
+
+        yield {"phase": "drafting"}
+        draft_result = await draft_node(state)
+        state.update(draft_result)
+
+        yield {"phase": "refining"}
+        async for chunk in refine_node_stream(state):
+            yield chunk

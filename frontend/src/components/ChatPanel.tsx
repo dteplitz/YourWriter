@@ -11,6 +11,7 @@ export default function ChatPanel({ writerId }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [currentPhase, setCurrentPhase] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export default function ChatPanel({ writerId }: ChatPanelProps) {
     setLoading(true);
 
     setStreamingContent('');
+    setCurrentPhase(null);
 
     try {
       let accumulated = '';
@@ -56,6 +58,10 @@ export default function ChatPanel({ writerId }: ChatPanelProps) {
         (token) => {
           accumulated += token;
           setStreamingContent(accumulated);
+          setCurrentPhase(null);
+        },
+        (phase) => {
+          setCurrentPhase(phase);
         },
       );
 
@@ -81,6 +87,7 @@ export default function ChatPanel({ writerId }: ChatPanelProps) {
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setLoading(false);
+      setCurrentPhase(null);
     }
   };
 
@@ -114,7 +121,14 @@ export default function ChatPanel({ writerId }: ChatPanelProps) {
           <div className="chat-message chat-message--assistant">
             <div className="chat-message-role">Writer</div>
             <div className="chat-message-content">
-              {streamingContent || <span className="chat-typing">Thinking...</span>}
+              {streamingContent || (
+                <span className="chat-typing">
+                  {currentPhase === 'outlining' && 'Planning the outline...'}
+                  {currentPhase === 'drafting' && 'Writing the first draft...'}
+                  {currentPhase === 'refining' && 'Polishing the final version...'}
+                  {!currentPhase && 'Thinking...'}
+                </span>
+              )}
             </div>
           </div>
         )}
