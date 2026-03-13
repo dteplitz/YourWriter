@@ -32,12 +32,22 @@ Each area of the codebase is designed to be worked on independently:
 - One logical change per commit
 - Always run tests before committing
 
-## Tech Stack (Planned)
-- **Backend**: Python, FastAPI, LangChain, LangGraph
-- **Frontend**: React, Vite, TypeScript
-- **Database**: TBD
-- **LLM**: TBD (multi-provider support planned)
-- **Auth**: TBD
+## Tech Stack
+- **Backend**: Python 3.11+, FastAPI, uvicorn
+- **Frontend**: React 19, Vite, TypeScript
+- **Database**: SQLite (via SQLAlchemy + aiosqlite)
+- **Agent Layer**: LangChain, LangGraph, anthropic SDK
+- **LLM**: Anthropic Claude (user-provided API key, free default with limits)
+- **Auth**: Simple email/password (JWT tokens)
+
+## Key Concepts
+- **Writer**: A user-created AI agent with purpose, personality, emotions, memories, topics, constraints, and lifelong objectives
+- **Identity Evolution**: Writers evolve autonomously after writing sessions — personality, emotions, and objectives shift over time
+- **User Constraints**: Plain English rules (word limits, audience, genre, tone) parsed into structured config
+- **Agent Visualization**: UI shows the agent loop in real-time for educational purposes
 
 ## Project Status
-Phase: Initial setup — project structure and development workflow configuration.
+Phase: Foundation build — setting up backend, frontend, and agent layer scaffolding.
+
+## Full Spec
+See SPEC.md for the complete product specification.
