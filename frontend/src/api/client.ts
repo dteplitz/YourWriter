@@ -94,6 +94,63 @@ export async function sendMessage(
   return response.json();
 }
 
+export async function sendMessageStream(
+  writerId: string,
+  content: string,
+  onToken: (token: string) => void,
+): Promise<{ messageId: number }> {
+  const token = localStorage.getItem('token');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}/chat/${writerId}/message/stream`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ content }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let messageId = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    // Keep the last potentially incomplete line in the buffer
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = JSON.parse(line.slice(6));
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      if (data.token) {
+        onToken(data.token);
+      }
+      if (data.done) {
+        messageId = data.message_id;
+      }
+    }
+  }
+
+  return { messageId };
+}
+
 export async function getChatHistory(writerId: string): Promise<ChatMessage[]> {
   const response = await fetchWithAuth(`/chat/${writerId}/history`);
   return response.json();

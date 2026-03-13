@@ -1,6 +1,7 @@
 """Chat service — bridges the backend API with the LangGraph agent layer."""
 
 import os
+from collections.abc import AsyncIterator
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -103,3 +104,61 @@ async def invoke_writer_agent(
             return msg["content"]
 
     return "[No response generated]"
+
+
+async def stream_writer_agent(
+    db: AsyncSession,
+    writer: Writer,
+    user_message: str,
+) -> AsyncIterator[str]:
+    """Stream the writer agent response as text chunks.
+
+    Yields text chunks for chat-mode responses. Falls back to a single
+    chunk for write-mode (streaming write pipeline is Sprint 2b).
+
+    After all chunks are yielded, the caller is responsible for persisting
+    the complete response.
+    """
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        raise RuntimeError("ANTHROPIC_API_KEY environment variable is not set")
+
+    from agents.graphs.writer_graph import detect_intent_node  # noqa: E402
+    from agents.nodes.chat_node import chat_node_stream  # noqa: E402
+
+    # Load latest identity
+    identity_row: WriterIdentity | None = None
+    if writer.identities:
+        identity_row = max(writer.identities, key=lambda i: i.version)
+
+    identity_dict = _identity_to_agent_state(identity_row) if identity_row else {
+        "purpose": writer.purpose,
+        "personality": ["thoughtful"],
+        "emotions": ["calm"],
+        "constraints": {},
+        "lifelong_objectives": [],
+    }
+    identity_dict["purpose"] = writer.purpose
+
+    # Load chat history
+    history = await _load_history(db, writer.id)
+    messages = history + [{"role": "user", "content": user_message}]
+
+    state = {
+        "messages": messages,
+        "writer_id": str(writer.id),
+        "writer_name": writer.name,
+        "identity": identity_dict,
+        "constraints": identity_dict.get("constraints", {}),
+    }
+
+    # Detect intent
+    intent_result = await detect_intent_node(state)
+    mode = intent_result.get("mode", "chat")
+
+    if mode == "chat":
+        async for chunk in chat_node_stream(state):
+            yield chunk
+    else:
+        # Write mode: fall back to non-streaming (Sprint 2b)
+        response_text = await invoke_writer_agent(db, writer, user_message)
+        yield response_text
