@@ -55,12 +55,14 @@ Acceptance criteria:
   - Key instructions each agent receives
   - Risk of mismatches between agents
 - Commits shared contracts to `main` if needed (before agents start)
+- Damian can add **guidance notes** per agent — technical advice, patterns to follow, pitfalls to avoid, references to existing code. These get included in the agent's prompt.
 - Both agree on the plan before any agent launches
 
 **Output:** Task list with:
 - Task description
 - Agent scope (which files/module)
 - Key instructions for the agent
+- Damian's guidance notes (if any)
 - Dependencies (what must finish first)
 - Parallel grouping
 - Shared contracts committed (if any)
