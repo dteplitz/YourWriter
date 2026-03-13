@@ -5,14 +5,28 @@ YourWriter is a multi-user AI story writing platform where users can create, cus
 
 ## Development Workflow
 
+### Feature Development Process
+For every feature, follow this process in order:
+1. **Design** — discuss architecture with the user, show a plan, get approval
+2. **Contract** — commit shared types/API shapes to `main` before building
+3. **Build** — use small, focused agents (one feature each, not whole modules)
+4. **Test** — write and run tests, verify they pass
+5. **Review** — show the user what was built, get approval before merging
+6. **Merge** — to `main`
+7. **Run** — verify it works end-to-end
+
+Prefer thin vertical slices (one feature across all layers) over horizontal layers.
+
 ### Parallel Development
-This project is designed for multi-conversation parallel development using git worktrees.
+This project supports multi-conversation parallel development.
 
 **Rules for all agents/conversations:**
 - ALWAYS work on a feature branch, never commit directly to `main`
 - Branch naming: `feature/<area>-<description>`, `fix/<description>`, `refactor/<description>`
 - Keep changes scoped to your feature area — avoid modifying shared interfaces without coordination
 - If you need to change a shared contract (API schema, database model, shared types), flag it to the user first
+- Define shared contracts on `main` BEFORE launching parallel agents
+- Use smaller, focused agents over large monolithic ones
 
 ### Module Boundaries
 Each area of the codebase is designed to be worked on independently:
@@ -47,7 +61,7 @@ Each area of the codebase is designed to be worked on independently:
 - **Agent Visualization**: UI shows the agent loop in real-time for educational purposes
 
 ## Project Status
-Phase: Foundation build — setting up backend, frontend, and agent layer scaffolding.
+Phase: Foundation complete. Next: first vertical slice — "Create a writer and chat with it".
 
 ## Full Spec
 See SPEC.md for the complete product specification.
