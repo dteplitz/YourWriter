@@ -4,9 +4,11 @@
 
 | Role | Who | Responsibilities |
 |------|-----|-----------------|
-| **Product Owner (PO)** | Damian | Vision, priorities, acceptance criteria, final approval |
-| **Tech Lead** | Claude (main conversation) | Architecture, task breakdown, agent coordination, code review, merging |
+| **Product Owner & Co-Architect** | Damian | Vision, priorities, acceptance criteria, technical architecture decisions, final approval |
+| **Tech Lead & Orchestrator** | Claude (main conversation) | Architecture proposals, task breakdown, agent coordination, code review, merging |
 | **Developers** | Subagents | Focused implementation tasks, tests |
+
+**Note:** Damian is a Senior FullStack Engineer with deep experience in AI workflows (LangChain/LangGraph). Technical decisions are made together — Claude proposes, Damian challenges and approves. Neither side makes architecture calls unilaterally.
 
 ## Sprint Cycle
 
@@ -28,17 +30,19 @@ Acceptance criteria:
 - [ ] ...
 ```
 
-### 2. Refinement (Tech Lead-driven)
+### 2. Refinement (Collaborative)
 **When:** After a user story is selected for the sprint.
 **What happens:**
 - Tech Lead analyzes the codebase and proposes an architecture/approach
-- Identifies which files/modules are affected
-- Flags risks, dependencies, or unknowns
-- PO reviews and approves the approach
+- Damian reviews, challenges, and suggests alternatives based on his experience
+- Together: discuss tradeoffs, pick the best approach
+- Identify which files/modules are affected
+- Flag risks, dependencies, or unknowns
 
 **Output:** A brief design doc (in conversation, not a file) covering:
 - What changes where
 - API contracts (if cross-module)
+- Technical decisions and why (agreed by both)
 - Edge cases considered
 
 ### 3. Planning (Tech Lead-driven)
@@ -109,7 +113,7 @@ Acceptance criteria:
 
 ## Principles
 
-1. **PO decides what, Tech Lead decides how** — Damian sets priorities and acceptance criteria, Claude proposes architecture and implementation
+1. **Damian decides what AND co-decides how** — Damian sets priorities and participates in architecture decisions. Claude proposes, Damian challenges and approves
 2. **Small batches** — One feature per sprint. Ship it, verify it, then move on
 3. **Contracts before code** — Shared types and API shapes committed to `main` before agents build
 4. **Transparency** — PO sees the plan before build starts, sees the result before merge
