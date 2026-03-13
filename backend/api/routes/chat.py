@@ -1,6 +1,7 @@
+import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,7 +9,10 @@ from backend.auth.auth import get_current_user
 from backend.db.database import get_db
 from backend.db.models import ChatMessage, MessageRole, User
 from backend.schemas.chat import ChatMessageCreate, ChatMessageResponse
+from backend.services.chat_service import invoke_writer_agent
 from backend.services.writer_service import get_writer
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -20,14 +24,9 @@ async def send_message(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> ChatMessageResponse:
-    """Save a user message and return a placeholder assistant response.
-
-    The actual LLM-powered response will be handled by the agent layer
-    in a later phase. For now this persists the user message and returns
-    an echo-style assistant reply so the API contract is complete.
-    """
-    # Verify writer belongs to user
-    await get_writer(db, writer_id=writer_id, user_id=current_user.id)
+    """Save a user message, invoke the writer agent, and return the response."""
+    # Verify writer belongs to user (also eager-loads identities)
+    writer = await get_writer(db, writer_id=writer_id, user_id=current_user.id)
 
     # Persist user message
     user_msg = ChatMessage(
@@ -38,11 +37,23 @@ async def send_message(
     db.add(user_msg)
     await db.flush()
 
-    # Placeholder assistant response (agent layer will replace this)
+    # Invoke the agent layer
+    try:
+        response_text = await invoke_writer_agent(db, writer, body.content)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception:
+        logger.exception("Agent invocation failed for writer %s", writer_id)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate response. Please try again.",
+        )
+
+    # Persist assistant response
     assistant_msg = ChatMessage(
         writer_id=writer_id,
         role=MessageRole.assistant,
-        content="[Agent response will be implemented in the agent layer]",
+        content=response_text,
     )
     db.add(assistant_msg)
     await db.flush()

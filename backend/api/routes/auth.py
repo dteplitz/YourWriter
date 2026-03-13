@@ -11,14 +11,15 @@ from backend.services.user_service import authenticate_user, create_user
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=UserResponse, status_code=201)
+@router.post("/register", response_model=Token, status_code=201)
 async def register(
     body: UserCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> UserResponse:
-    """Register a new user account."""
+) -> Token:
+    """Register a new user account and return a JWT for auto-login."""
     user = await create_user(db, email=body.email, password=body.password)
-    return UserResponse.model_validate(user)
+    token = create_access_token(data={"sub": user.email})
+    return Token(access_token=token)
 
 
 @router.post("/login", response_model=Token)

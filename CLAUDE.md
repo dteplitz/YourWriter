@@ -28,6 +28,13 @@ This project supports multi-conversation parallel development.
 - Define shared contracts on `main` BEFORE launching parallel agents
 - Use smaller, focused agents over large monolithic ones
 
+### QA Environment Verification
+Before doing manual QA in the browser:
+- Confirm the canonical frontend URL/port with the user or Tech Lead if there is any inconsistency
+- Treat agent messages about running servers as provisional until the browser confirms them
+- If the browser shows a different app, stale service worker content, or a runtime that contradicts the reported environment, stop and flag it as an environment issue before continuing
+- Do not treat findings from a contaminated or ambiguous runtime as confirmed product bugs
+
 ### Module Boundaries
 Each area of the codebase is designed to be worked on independently:
 - `backend/` — FastAPI server, API routes, services, database
