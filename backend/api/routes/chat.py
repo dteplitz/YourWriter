@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.auth import get_current_user
-from backend.db.database import get_db
+from backend.db.database import async_session, get_db
 from backend.db.models import ChatMessage, MessageRole, User
 from backend.schemas.chat import ChatMessageCreate, ChatMessageResponse
 from backend.services.chat_service import invoke_writer_agent, stream_writer_agent
@@ -68,37 +68,42 @@ async def send_message(
 async def send_message_stream(
     writer_id: int,
     body: ChatMessageCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> StreamingResponse:
-    """Stream the writer agent response via Server-Sent Events."""
-    writer = await get_writer(db, writer_id=writer_id, user_id=current_user.id)
+    """Stream the writer agent response via Server-Sent Events.
 
-    # Persist user message
-    user_msg = ChatMessage(
-        writer_id=writer_id,
-        role=MessageRole.user,
-        content=body.content,
-    )
-    db.add(user_msg)
-    await db.flush()
+    Does NOT use Depends(get_db) — manages its own short-lived sessions.
+    The LLM call can take 10-30s; holding an SQLite connection open that
+    long blocks all other writes.
+    """
+    # Short-lived session: auth check, load writer, persist user message
+    async with async_session() as db:
+        writer = await get_writer(db, writer_id=writer_id, user_id=current_user.id)
+        user_msg = ChatMessage(
+            writer_id=writer_id,
+            role=MessageRole.user,
+            content=body.content,
+        )
+        db.add(user_msg)
+        await db.commit()
 
     async def event_generator():
         full_response = ""
         try:
-            async for chunk in stream_writer_agent(db, writer, body.content):
+            async for chunk in stream_writer_agent(writer, body.content):
                 full_response += chunk
                 yield f"data: {json.dumps({'token': chunk})}\n\n"
 
-            # Persist the complete assistant response
-            assistant_msg = ChatMessage(
-                writer_id=writer_id,
-                role=MessageRole.assistant,
-                content=full_response,
-            )
-            db.add(assistant_msg)
-            await db.flush()
-            await db.refresh(assistant_msg)
+            # Short-lived session: persist assistant response
+            async with async_session() as save_db:
+                assistant_msg = ChatMessage(
+                    writer_id=writer_id,
+                    role=MessageRole.assistant,
+                    content=full_response,
+                )
+                save_db.add(assistant_msg)
+                await save_db.commit()
+                await save_db.refresh(assistant_msg)
 
             yield f"data: {json.dumps({'done': True, 'message_id': assistant_msg.id})}\n\n"
         except RuntimeError as exc:

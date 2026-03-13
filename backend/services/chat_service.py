@@ -107,23 +107,23 @@ async def invoke_writer_agent(
 
 
 async def stream_writer_agent(
-    db: AsyncSession,
     writer: Writer,
     user_message: str,
 ) -> AsyncIterator[str]:
     """Stream the writer agent response as text chunks.
 
+    Manages its own short-lived DB session for loading history so the
+    caller does not need to hold a connection open during the LLM call.
+
     Yields text chunks for chat-mode responses. Falls back to a single
     chunk for write-mode (streaming write pipeline is Sprint 2b).
-
-    After all chunks are yielded, the caller is responsible for persisting
-    the complete response.
     """
     if not os.getenv("ANTHROPIC_API_KEY"):
         raise RuntimeError("ANTHROPIC_API_KEY environment variable is not set")
 
     from agents.graphs.writer_graph import detect_intent_node  # noqa: E402
     from agents.nodes.chat_node import chat_node_stream  # noqa: E402
+    from backend.db.database import async_session  # noqa: E402
 
     # Load latest identity
     identity_row: WriterIdentity | None = None
@@ -139,8 +139,10 @@ async def stream_writer_agent(
     }
     identity_dict["purpose"] = writer.purpose
 
-    # Load chat history
-    history = await _load_history(db, writer.id)
+    # Load chat history in a short-lived session, then release
+    async with async_session() as db:
+        history = await _load_history(db, writer.id)
+
     messages = history + [{"role": "user", "content": user_message}]
 
     state = {
@@ -160,5 +162,6 @@ async def stream_writer_agent(
             yield chunk
     else:
         # Write mode: fall back to non-streaming (Sprint 2b)
-        response_text = await invoke_writer_agent(db, writer, user_message)
+        async with async_session() as db:
+            response_text = await invoke_writer_agent(db, writer, user_message)
         yield response_text
