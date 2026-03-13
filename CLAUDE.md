@@ -6,14 +6,14 @@ YourWriter is a multi-user AI story writing platform where users can create, cus
 ## Development Workflow
 
 ### Feature Development Process
-For every feature, follow this process in order:
-1. **Design** — discuss architecture with the user, show a plan, get approval
-2. **Contract** — commit shared types/API shapes to `main` before building
-3. **Build** — use small, focused agents (one feature each, not whole modules)
-4. **Test** — write and run tests, verify they pass
-5. **Review** — show the user what was built, get approval before merging
-6. **Merge** — to `main`
-7. **Run** — verify it works end-to-end
+Follow the micro-sprint process defined in `PROCESS.md`:
+1. **Backlog Grooming** — PO describes what, we define user stories with acceptance criteria
+2. **Refinement** — Tech Lead proposes architecture, PO approves approach
+3. **Planning** — Break into focused tasks, identify parallelism, commit shared contracts
+4. **Build** — Launch agents, each with scoped tasks
+5. **Review** — Tech Lead reviews agent output, presents summary, PO approves
+6. **Merge & Verify** — Merge to `main`, run end-to-end, verify acceptance criteria
+7. **Retro** — (optional) What to improve, update process docs
 
 Prefer thin vertical slices (one feature across all layers) over horizontal layers.
 
