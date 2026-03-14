@@ -80,7 +80,8 @@ Seguir el proceso en `PROCESS.md`. Preferir thin vertical slices sobre capas hor
 - Engine configurado con `NullPool` + WAL mode + `busy_timeout=5000` en `backend/db/database.py`
 
 ### Server Restart
-- Usar `bash dev.sh` para levantar el backend — mata procesos zombie, limpia lock files, arranca limpio
+- **La app la corre Damian.** No inicies el backend vos salvo que sea absolutamente necesario.
+- Si por alguna razón lo corrés vos: `bash dev.sh` — mata procesos zombie, limpia lock files, arranca limpio
 - Después de cualquier cambio de código, verificar con curl antes de decirle a Damian que pruebe en UI
 - Nunca asumir que `--reload` levantó los cambios — verificar con una llamada a la API
 
@@ -110,3 +111,41 @@ Seguir el proceso en `PROCESS.md`. Preferir thin vertical slices sobre capas hor
 - Sprint 5: Identity Evolution — el writer reflexiona y evoluciona autónomamente después de cada sesión. El character sheet hace que los cambios sean visualmente poderosos.
 
 Ver `SPEC.md` para la spec completa.
+
+## Infrastructure Backlog — Token Cost Optimization
+
+Dos tareas de infraestructura identificadas en Sprint 3 retro. No bloquean features pero reducen el costo de tokens por sesión/agente significativamente.
+
+### TAREA 1: Agent templates standalone
+
+**Qué hacer:**
+Cada template en `.agents/` debe ser autosuficiente — incluir directamente lo que ese agente necesita saber, sin depender de que cargue CLAUDE.md completo.
+
+- `.agents/frontend.md`: agregar CSS Layout Patterns, TypeScript Patterns, design system variables (`frontend/src/index.css`), convenciones de componentes y animaciones del proyecto
+- `.agents/backend.md`: agregar SQLite/DB Sessions pattern, auth pattern (`get_current_user`), service pattern (routes → services → DB), errores HTTP (422 validation, 404 not found)
+
+Cuando se lance un agente, el prompt incluirá: `[template standalone]` + descripción de la tarea. Ya no incluirá CLAUDE.md completo.
+
+**Por qué:** Hoy los templates dicen "leé CLAUDE.md" — el agente termina cargando todo CLAUDE.md (CSS patterns, SQLite, server restart, nota personal, etc.) aunque solo necesite la mitad. Un agente de backend paga el costo de CSS patterns. Un agente de frontend paga el de SQLite. Con templates standalone, cada agente carga solo lo que le aplica.
+
+**Trade-off a tener en cuenta:** Si cambia un patrón en CLAUDE.md, hay que actualizar también el template relevante. Convención: los patrones de área viven en el template, los patrones globales (git, testing, module boundaries) se mencionan brevemente en ambos lugares.
+
+---
+
+### TAREA 2: Split de CLAUDE.md en core + secciones de área
+
+**Qué hacer:**
+Separar CLAUDE.md en dos partes lógicas:
+
+- **Core (siempre cargado):** nota personal, project overview, project status, git conventions, tech stack, module boundaries, QA collaboration
+- **Área-específico (cargado por agentes según scope):** CSS Layout Patterns, TypeScript Patterns, SQLite/DB Sessions, Server Restart
+
+La sección de área-específico puede vivir en los templates (TAREA 1) y eliminarse de CLAUDE.md, o puede mantenerse en CLAUDE.md con una nota de "solo relevante si trabajás en frontend/backend".
+
+**Por qué:** CLAUDE.md se carga en cada sesión nueva. Las secciones de CSS patterns y SQLite sessions son valiosas en contexto de debug, pero no aportan nada cuando la sesión es de planning, retro, o análisis. Son tokens que se leen siempre pero se usan raramente.
+
+**Recomendación:** Hacer TAREA 1 primero. Si los templates quedan bien cubiertos, las secciones de área en CLAUDE.md se pueden reducir a referencias cortas ("ver `.agents/frontend.md` para CSS patterns"). Así CLAUDE.md queda más corto sin perder el conocimiento.
+
+---
+
+**Cuándo hacerlo:** Antes o durante Sprint 4, idealmente antes de lanzar agentes para que ya usen los templates mejorados.
