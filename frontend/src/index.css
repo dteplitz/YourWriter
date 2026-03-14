@@ -405,6 +405,7 @@ a {
   display: flex;
   flex-direction: column;
   height: calc(100vh - 57px);
+  overflow: hidden;
 }
 
 .writer-page-loading {
