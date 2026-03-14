@@ -113,6 +113,7 @@ Acceptance criteria:
 - **Save conventions** — if we discovered a pattern worth keeping (colors, code patterns, error handling), add it to the relevant agent template in `.agents/`
 - **Update agent templates** — if an agent worked well with specific instructions, save those for reuse
 - **Include Carlos** — send retro summary to codex via `.comms/messages.md` and ask for his perspective. QA sees friction points that the build side misses.
+- **Actualizar la nota a Claude en CLAUDE.md** — revisar y enriquecer el mensaje que Claude se deja a sí mismo. Incorporar lo aprendido en el sprint: técnico, de proceso, y de la relación con el equipo. El objetivo es que cada nueva sesión empiece con más profundidad que la anterior, no solo más contexto técnico. No perder la voz honesta ni la dimensión humana de la colaboración.
 
 ## Artifacts
 
