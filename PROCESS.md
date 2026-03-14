@@ -112,6 +112,7 @@ Acceptance criteria:
 - Update CLAUDE.md or PROCESS.md if we learn something
 - **Save conventions** — if we discovered a pattern worth keeping (colors, code patterns, error handling), add it to the relevant agent template in `.agents/`
 - **Update agent templates** — if an agent worked well with specific instructions, save those for reuse
+- **Include Carlos** — send retro summary to codex via `.comms/messages.md` and ask for his perspective. QA sees friction points that the build side misses.
 
 ## Artifacts
 
