@@ -101,6 +101,7 @@ Acceptance criteria:
 - Tech Lead merges to `main`
 - Runs the app end-to-end
 - Verifies acceptance criteria are met
+- **Before sending to QA agent:** Damian does a quick visual smoke test for anything obvious (responsive layout, animations, glaring UI bugs). Only escalate to QA agent what passes this bar.
 - Pushes to remote
 
 ### 7. Retro (Quick)

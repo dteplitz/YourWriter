@@ -48,6 +48,17 @@ Each area of the codebase is designed to be worked on independently:
 - All new features need tests
 - Keep functions small and focused
 
+### CSS Layout Patterns
+- Fixed-height layouts require `min-height: 0` on **every** flex child in the chain — missing one breaks the whole layout
+- When fixing layout CSS: **one change at a time**, verify in browser before the next
+- Columns that scroll independently need: `overflow-y: auto` + `min-height: 0` on the grid/flex item
+- Sticky panel headers: `position: sticky; top: 0; background: <panel-bg-color>; z-index: 1`
+- Mobile responsive: always add `width: 100%; min-width: 0` to grid items in the media query to prevent implicit min-width from blocking collapse
+
+### TypeScript Patterns
+- When comparing Records that mix number/boolean/string values (e.g. identity fields), normalize both sides to string before comparing: `Object.entries(rec).sort().map(([k,v]) => [k, String(v)])`
+- Tests must use realistic data types — if the domain converts numbers to strings, the test fixture should too
+
 ### Git Conventions
 - Commit messages: imperative mood, concise ("Add user auth endpoint", not "Added user auth endpoint")
 - One logical change per commit
@@ -68,7 +79,7 @@ Each area of the codebase is designed to be worked on independently:
 - **Agent Visualization**: UI shows the agent loop in real-time for educational purposes
 
 ## Project Status
-Phase: Foundation complete. Next: first vertical slice — "Create a writer and chat with it".
+Phase: Sprint 3 complete (editable ConfigPanel). Next: Sprint 4 — character sheet UI redesign.
 
 ## Full Spec
 See SPEC.md for the complete product specification.
