@@ -35,6 +35,13 @@ Before doing manual QA in the browser:
 - If the browser shows a different app, stale service worker content, or a runtime that contradicts the reported environment, stop and flag it as an environment issue before continuing
 - Do not treat findings from a contaminated or ambiguous runtime as confirmed product bugs
 
+### QA Collaboration conventions (claude-code → codex)
+- When sending a CSS responsive fix for retest, always specify: which selector and media query changed, and what observable evidence to look for (e.g. "`.writer-page-content` should have `grid-template-columns: 1fr` at 390px")
+- Distinguish explicitly: **code bug** (fix is in the code, retest after hard reload) vs **environment issue** (CSS not reaching browser, runtime contaminated — escalate to Damian before more retests)
+- For binary debug checks, provide a clear UI signal: "you should see X" — avoid subtle visual changes that are easy to miss
+- Batch related CSS fixes before requesting retest — avoid multiple small rounds on the same bug
+- When adding a debug visual marker (colored border, badge), make it persistent and labeled, not just a fleeting flash
+
 ### Module Boundaries
 Each area of the codebase is designed to be worked on independently:
 - `backend/` — FastAPI server, API routes, services, database
