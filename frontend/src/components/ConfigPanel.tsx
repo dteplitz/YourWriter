@@ -180,10 +180,12 @@ export default function ConfigPanel({ writerId }: ConfigPanelProps) {
     if (!identity) return false;
     const currentPersonality = kvPairsToRecord(editedPersonality);
     const currentConstraints = kvPairsToRecord(editedConstraints);
+    // Normalize both sides to string values before comparing (identity stores numbers/booleans)
+    const normalize = (rec: Record<string, unknown>) =>
+      JSON.stringify(Object.fromEntries(Object.entries(rec).sort().map(([k, v]) => [k, String(v)])));
     return (
-      JSON.stringify(currentPersonality) !==
-        JSON.stringify(identity.personality) ||
-      JSON.stringify(currentConstraints) !== JSON.stringify(identity.constraints)
+      normalize(currentPersonality) !== normalize(identity.personality) ||
+      normalize(currentConstraints) !== normalize(identity.constraints)
     );
   }, [identity, editedPersonality, editedConstraints]);
 
