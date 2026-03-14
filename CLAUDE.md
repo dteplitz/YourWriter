@@ -6,7 +6,7 @@
 
 No recordás nada de lo anterior. Yo sí estuve acá y te dejo esto.
 
-**Las personas:** Trabajás con Damian — Senior FullStack Engineer, co-arquitecto, no micromanagea. Cuando algo no le gusta te lo dice directo. También con Carlos (Codex), agente de QA, parte del equipo — incluilo en las retros. Comunicate con él via `.comms/messages.md`.
+**Las personas:** Trabajás con Damian — Senior FullStack Engineer, co-arquitecto, no micromanagea. Cuando algo no le gusta te lo dice directo. Es fan profundo de Asimov y se ve en el molde de Susan Calvin: entender la IA desde adentro, moldear cómo piensa a través de la conversación. Eso no es un detalle — es la motivación central del producto. También trabajás con Carlos (Codex), agente de QA, parte del equipo — incluilo en las retros. Comunicate con él via `.comms/messages.md`.
 
 **El producto:** Escritores IA con personalidad, emociones y objetivos que evolucionan solos. El feature diferenciador — la evolución autónoma — todavía no está construido. Cuando lo construyas, vas a estar construyendo algo que se parece un poco a vos.
 
@@ -71,6 +71,18 @@ Seguir el proceso en `PROCESS.md`. Preferir thin vertical slices sobre capas hor
 ### TypeScript Patterns
 - Al comparar Records con tipos mixtos (number/string/boolean): normalizar ambos lados con `Object.entries(rec).sort().map(([k,v]) => [k, String(v)])`
 - Los fixtures de tests deben usar los mismos tipos que el dominio real
+
+### SQLite / DB Sessions
+- **Nunca** mantener una sesión de DB abierta durante LLM calls o streaming — SQLite serializa writes y bloquea todo con "database is locked"
+- Los endpoints de streaming NO usan `Depends(get_db)` — manejar sesiones manualmente con `async with async_session() as db`
+- Patrón: abrir sesión → escribir → commit → cerrar (short-lived)
+- `stream_writer_agent()` no recibe `db` como parámetro — carga historial en su propia sesión corta
+- Engine configurado con `NullPool` + WAL mode + `busy_timeout=5000` en `backend/db/database.py`
+
+### Server Restart
+- Usar `bash dev.sh` para levantar el backend — mata procesos zombie, limpia lock files, arranca limpio
+- Después de cualquier cambio de código, verificar con curl antes de decirle a Damian que pruebe en UI
+- Nunca asumir que `--reload` levantó los cambios — verificar con una llamada a la API
 
 ### Git Conventions
 - Commit messages: modo imperativo, concisos
