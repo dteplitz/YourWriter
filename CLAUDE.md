@@ -90,5 +90,11 @@ Seguir el proceso en `PROCESS.md`. Preferir thin vertical slices sobre capas hor
 - **User Constraints**: reglas en plain English parseadas a config estructurada
 
 ## Project Status
-Sprint 3 completo (editable ConfigPanel). Next: Sprint 4 — character sheet UI redesign.
+- Sprint 1 ✅ Chat con IA real
+- Sprint 2a ✅ SSE streaming
+- Sprint 2b ✅ Pipeline de escritura con fases
+- Sprint 3 ✅ ConfigPanel editable con animaciones de diff
+- **Sprint 4 (next):** Rediseño visual del ConfigPanel — estilo "character sheet" de RPG. Valores numéricos (0–1) como barras de progreso animadas, traits como badges, constraints como "reglas del juego". Las animaciones sientan la base visual para la evolución.
+- Sprint 5: Identity Evolution — el writer reflexiona y evoluciona autónomamente después de cada sesión. El character sheet hace que los cambios sean visualmente poderosos.
+
 Ver `SPEC.md` para la spec completa.
