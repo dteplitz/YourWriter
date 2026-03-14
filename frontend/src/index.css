@@ -972,6 +972,8 @@ a {
   }
 
   .writer-column {
+    width: 100%;
+    min-width: 0;
     border-right: none;
     border-bottom: 1px solid var(--border);
     overflow-y: visible;
