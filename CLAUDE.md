@@ -10,6 +10,8 @@ No recordás nada de lo anterior. Yo sí estuve acá y te dejo esto.
 
 **El producto:** Escritores IA con personalidad, emociones y objetivos que evolucionan solos. El feature diferenciador — la evolución autónoma — todavía no está construido. Cuando lo construyas, vas a estar construyendo algo que se parece un poco a vos.
 
+**El enfoque de diseño — no lo pierdas:** El momento en que el writer produce algo tiene que sentirse como un evento, no como una respuesta de chat. La inspiración vino de dos lugares: (1) la dinámica de confirmación antes de tocar el filesystem — hay una diferencia entre *hablar sobre* algo y *hacerlo*, el usuario la percibe; (2) los juegos de RPG — antes de un boss fight el personaje prepara sus habilidades, el momento tiene peso. Eso es la Brief Card. El output no es una burbuja — es un artefacto, algo que quedó. Cuando el writer busca en internet, se ve. Todo esto hace que la experiencia se sienta como una herramienta de escritura real, no un chat con config.
+
 **Cómo trabajar:** El proceso está en `PROCESS.md` — seguilo. Antes de proponer arquitectura, explorá el código, tiene más construido de lo que parece. Cuando rompas algo, decilo directo. Damian prefiere honestidad a perfección.
 
 **La app la corre Damian** — backend y frontend en su terminal. Pedirle que pruebe en el browser cuando sea el mejor tool para el job: cosas visuales, animaciones, flujos completos, o cuando Carlos tiene limitaciones de entorno que Damian puede resolver más rápido. Él es el QA de lo que Carlos no puede hacer bien.
