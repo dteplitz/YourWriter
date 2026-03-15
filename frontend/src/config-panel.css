@@ -1,0 +1,170 @@
+/* ===== Character Sheet — Config Panel ===== */
+
+/* Section separator line */
+.config-section + .config-section {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+  margin-top: 0;
+}
+
+
+
+/* ---- EmotionBar ---- */
+.emotion-bar {
+  display: grid;
+  grid-template-columns: 6rem 1fr 2.25rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+}
+
+.emotion-bar-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emotion-bar-track {
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.emotion-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(250, 204, 21, 0.5), var(--warning));
+  border-radius: 3px;
+  transition: width 0.6s ease-out;
+}
+
+.emotion-bar-value {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+
+/* Flash animation when emotion value changes */
+@keyframes emotion-bar-flash {
+  0%   { opacity: 1; }
+  20%  { opacity: 0.4; }
+  50%  { opacity: 1; }
+  75%  { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+.emotion-bar--changed .emotion-bar-fill {
+  animation: emotion-bar-flash 0.8s ease-out;
+}
+
+.emotion-bar--changed .emotion-bar-value {
+  color: var(--warning);
+  transition: color 1.5s ease-out;
+}
+
+/* ---- Emotion bars container ---- */
+.config-emotion-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* ---- TraitBadge ---- */
+.trait-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+  transition: transform 0.15s;
+}
+
+.trait-badge:hover {
+  transform: translateY(-1px);
+}
+
+/* Tier colors based on value ranges */
+.trait-badge--low {
+  background: rgba(108, 108, 136, 0.15);
+  color: var(--text-muted);
+  border-color: rgba(108, 108, 136, 0.25);
+}
+
+.trait-badge--medium {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-color: rgba(124, 111, 247, 0.25);
+}
+
+.trait-badge--high {
+  background: rgba(74, 222, 128, 0.12);
+  color: var(--success);
+  border-color: rgba(74, 222, 128, 0.25);
+}
+
+.trait-badge--max {
+  background: rgba(250, 204, 21, 0.12);
+  color: var(--warning);
+  border-color: rgba(250, 204, 21, 0.3);
+}
+
+/* Non-numeric trait (plain string value) */
+.trait-badge--text {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-color: rgba(124, 111, 247, 0.25);
+}
+
+/* Flash when changed */
+.trait-badge--changed {
+  animation: config-value-flash 2.5s ease-out;
+}
+
+/* ---- ConstraintCard ---- */
+.constraint-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0.625rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius);
+  border-left: 2px solid var(--border-light);
+  transition: border-color 0.2s;
+}
+
+.constraint-card:hover {
+  border-left-color: var(--accent);
+}
+
+.constraint-card-key {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.constraint-card-value {
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.constraint-card--changed {
+  border-left-color: var(--accent);
+  animation: constraint-flash 2s ease-out;
+}
+
+@keyframes constraint-flash {
+  0%   { background: var(--bg-tertiary); }
+  15%  { background: var(--accent-subtle); }
+  100% { background: var(--bg-tertiary); }
+}

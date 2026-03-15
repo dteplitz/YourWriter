@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Identity } from '../types';
 import * as api from '../api/client';
+import { EmotionBar } from './EmotionBar';
+import { TraitBadge } from './TraitBadge';
+import { ConstraintCard } from './ConstraintCard';
+import '../config-panel.css';
 
 interface ConfigPanelProps {
   writerId: string;
@@ -29,7 +33,9 @@ function computeChangedKeys(
   prevPersonality: Record<string, unknown>,
   nextPersonality: Record<string, unknown>,
   prevConstraints: Record<string, unknown>,
-  nextConstraints: Record<string, unknown>
+  nextConstraints: Record<string, unknown>,
+  prevEmotions: Record<string, unknown> = {},
+  nextEmotions: Record<string, unknown> = {}
 ): Set<string> {
   const changed = new Set<string>();
 
@@ -50,6 +56,16 @@ function computeChangedKeys(
   for (const k of allConstraintKeys) {
     if (String(prevConstraints[k] ?? '') !== String(nextConstraints[k] ?? '')) {
       changed.add(`constraints.${k}`);
+    }
+  }
+
+  const allEmotionKeys = new Set([
+    ...Object.keys(prevEmotions),
+    ...Object.keys(nextEmotions),
+  ]);
+  for (const k of allEmotionKeys) {
+    if (String(prevEmotions[k] ?? '') !== String(nextEmotions[k] ?? '')) {
+      changed.add(`emotions.${k}`);
     }
   }
 
@@ -215,7 +231,9 @@ export default function ConfigPanel({ writerId }: ConfigPanelProps) {
         prevIdentity.personality,
         finalIdentity.personality,
         prevIdentity.constraints,
-        finalIdentity.constraints
+        finalIdentity.constraints,
+        prevIdentity.emotions,
+        finalIdentity.emotions
       );
 
       setIdentity(finalIdentity);
@@ -291,12 +309,12 @@ export default function ConfigPanel({ writerId }: ConfigPanelProps) {
         ) : (
           <div className="config-tags">
             {Object.entries(identity.personality).map(([key, value]) => (
-              <span
+              <TraitBadge
                 key={key}
-                className={`config-tag${changedKeys.has(`personality.${key}`) ? ' config-value--changed' : ''}`}
-              >
-                {key}: {String(value)}
-              </span>
+                name={key}
+                value={value}
+                isChanged={changedKeys.has(`personality.${key}`)}
+              />
             ))}
             {Object.keys(identity.personality).length === 0 && (
               <span className="config-empty-text">No traits defined</span>
@@ -311,12 +329,21 @@ export default function ConfigPanel({ writerId }: ConfigPanelProps) {
           Emotions{' '}
           <span className="config-auto-badge">Evolves automatically</span>
         </h4>
-        <div className="config-tags">
-          {Object.entries(identity.emotions).map(([key, value]) => (
-            <span key={key} className="config-tag config-tag--emotion">
-              {key}: {String(value)}
-            </span>
-          ))}
+        <div className="config-emotion-bars">
+          {Object.entries(identity.emotions).map(([key, value]) =>
+            typeof value === 'number' ? (
+              <EmotionBar
+                key={key}
+                name={key}
+                value={value}
+                isChanged={changedKeys.has(`emotions.${key}`)}
+              />
+            ) : (
+              <span key={key} className="config-tag config-tag--emotion">
+                {key}: {String(value)}
+              </span>
+            )
+          )}
           {Object.keys(identity.emotions).length === 0 && (
             <span className="config-empty-text">No emotions defined</span>
           )}
@@ -350,14 +377,12 @@ export default function ConfigPanel({ writerId }: ConfigPanelProps) {
         ) : (
           <div className="config-constraints">
             {Object.entries(identity.constraints).map(([key, value]) => (
-              <div key={key} className="config-constraint">
-                <span className="config-constraint-key">{key}:</span>
-                <span
-                  className={`config-constraint-value${changedKeys.has(`constraints.${key}`) ? ' config-value--changed' : ''}`}
-                >
-                  {value}
-                </span>
-              </div>
+              <ConstraintCard
+                key={key}
+                name={key}
+                value={value}
+                isChanged={changedKeys.has(`constraints.${key}`)}
+              />
             ))}
             {Object.keys(identity.constraints).length === 0 && (
               <span className="config-empty-text">No constraints set</span>
