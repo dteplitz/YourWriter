@@ -47,11 +47,14 @@ Each writer maintains standing goals (e.g., "Improve at concise hooks", "Develop
 - View/edit writer configuration
 - Delete writer
 
-#### 2. Chat Interface
+#### 2. Chat Interface + Writing Experience
 - Conversational interaction with selected writer
 - **Pre-writing**: discuss what to write, provide context, give instructions
-- **Writing**: writer produces content using its full identity
+- **Brief Card**: when the user requests formal writing, the writer surfaces a Brief Card before executing — shows inferred format, tone, constraints. User confirms or adjusts. Writer asks for clarification if needed.
+- **Tool use visible**: when the writer searches the internet mid-pipeline, the user sees it — an animated pill in the chat ("Searching: query..."). Not logs — a designed event.
+- **Writing artifact**: writer output appears as a distinct document card, not a chat bubble. Separate visual treatment. Actions: copy, iterate, "not what I wanted".
 - **Post-writing**: iterate on output, refine, adjust — conversationally
+- **Pieces library**: all written pieces accumulate in a browseable library per writer
 - Chat history persisted per writer
 
 #### 3. Identity Evolution (Prominent Feature)
