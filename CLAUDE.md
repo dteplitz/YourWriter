@@ -42,12 +42,15 @@ Seguir el proceso en `PROCESS.md`. Preferir thin vertical slices sobre capas hor
 - Confirmar URL/puerto canónico antes de QA
 - Si el browser muestra otra app o contenido stale, frenar y reportar environment issue antes de reportar bugs
 - Distinguir explícitamente: **code bug** (retest después de hard reload) vs **environment issue** (escalar a Damian)
+- Si aparece `Could not validate credentials`, primero probar `Logout` y volver a hacer login antes de clasificarlo como `environment issue`
+- Si el estado inválido se limpia con `Logout`, tratarlo como issue de sesión expirada / credenciales faltantes, no como bug de producto
 
 ### QA — Collaboration (claude-code → codex)
 - Al mandar un fix CSS para retest: especificar qué selector/media query cambió y qué evidencia observable buscar
 - Para debug checks: dar señal binaria clara en UI ("deberías ver X")
 - Agrupar fixes relacionados antes de pedir retest — evitar muchas rondas chicas
 - Debug visual markers: persistentes y con label, no flashes que se pierden
+- Si después de guardar el panel hace scroll y saca de vista el elemento animado, no marcar gap funcional por default; escalarlo como posible `UX issue` separado
 
 ### Module Boundaries
 - `backend/` — FastAPI, routes, services, DB
@@ -88,8 +91,9 @@ Ver los templates de agentes — son la fuente de verdad para patrones de área:
 - Sprint 2a ✅ SSE streaming
 - Sprint 2b ✅ Pipeline de escritura con fases
 - Sprint 3 ✅ ConfigPanel editable con animaciones de diff
-- **Sprint 4 (en curso):** Rediseño visual del ConfigPanel — estilo "character sheet" de RPG. Valores numéricos (0–1) como barras de progreso animadas, traits como badges, constraints como "reglas del juego". Branch: `feature/config-panel-character-sheet`, en QA.
-- Sprint 5: Identity Evolution — el writer reflexiona y evoluciona autónomamente después de cada sesión. El character sheet hace que los cambios sean visualmente poderosos.
+- Sprint 4 ✅ Rediseño visual del ConfigPanel — estilo "character sheet" de RPG. Valores numéricos (0–1) como barras de progreso animadas, traits como badges, constraints como "reglas del juego". Branch: `feature/config-panel-character-sheet`, QA aprobado.
+- **Sprint 5 (next):** Writing Experience — Brief Card, tool use visible, artifact display, pieces library. Ver `SPRINT5.md`.
+- Sprint 6: Identity Evolution + Writer Initialization Flow ("quiero un escritor tipo GRRM")
 
-Ver `SPEC.md` para la spec completa.
+Ver `SPEC.md` para la spec completa. Ver `SPRINT5.md` para el plan técnico del próximo sprint.
 
