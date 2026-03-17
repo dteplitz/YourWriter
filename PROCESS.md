@@ -44,27 +44,33 @@ Launch agents (parallel where possible). Agents work on feature branches, write 
 Tech Lead reviews for correctness, consistency, quality → fixes integration issues → presents summary to PO → PO approves or requests changes.
 
 ### 6. Merge & Verify
-Merge to `main` → Damian does quick visual smoke test (layout, animations, obvious UI bugs) → if it passes, escalate to QA agent → push to remote.
+Merge to `main` → Claude runs QA with Playwright MCP (navigate, interact, screenshot) → report findings → Damian approves → push to remote.
 
-**When to ask Damian to test vs escalate to Carlos:** Ask Damian when it's something visual/interactive that would take Carlos many rounds (e.g., animations, complex flows). Escalate to Carlos for systematic functional QA. Don't abuse Damian's time — only when it genuinely saves rounds.
+**QA ownership:** Claude does visual and functional QA via Playwright directly from the main conversation (subagents don't inherit the MCP). Escalate to Damian only for things Playwright can't reach (system-level auth, hardware, etc.).
+
+<!-- Carlos (Codex) did QA from Sprint 1–4 via .comms/messages.md — solid collaboration, clean handoffs.
+     Replaced by Playwright MCP in Sprint 5 for faster iteration. Archives in .comms/archive/. -->
 
 ### 7. Retro (optional, when useful)
 - What went well / what to change
 - Update `CLAUDE.md` or `PROCESS.md` if we learned something
 - Save conventions to `.agents/` templates
-- Include Carlos — send retro summary via `.comms/messages.md`
+- **Actualizar `PRODUCT.md`** — qué features quedaron funcionales, qué cambió en el UX, qué sigue sin estar
+- **Actualizar `ARCHITECTURE.md`** — qué módulos/endpoints/modelos se agregaron o cambiaron, qué pasó de "no existe" a "existe"
 - Update the "Nota para Claude" in `CLAUDE.md` — enrich it with sprint learnings (technical, process, and human). Goal: each new session starts with more depth than the last.
-- Archive `.comms/messages.md` — move sprint messages to `.comms/archive/sprint-N.md`, keep only current sprint messages.
+- Archive `.comms/messages.md` if there are messages — move to `.comms/archive/sprint-N.md`, keep file clean.
 
 ## Artifacts
 
 | Artifact | Location | Purpose |
 |----------|----------|---------|
-| Product spec | `SPEC.md` | Full product vision |
+| Product vision | `SPEC.md` | Full product vision (static) |
+| **Functional state** | **`PRODUCT.md`** | **Lo que existe hoy — UX, flows, features. Updated each sprint.** |
+| **Technical state** | **`ARCHITECTURE.md`** | **Lo que está construido — endpoints, modelos, componentes. Updated each sprint.** |
+| Design lineage | `LINEAGE.md` | De dónde vienen las decisiones de diseño (artístico, interno) |
 | Dev process | `PROCESS.md` | This file |
 | Agent guidelines | `CLAUDE.md` | Rules all agents follow |
 | Agent templates | `.agents/*.md` | Reusable agent profiles |
-| Comms | `.comms/messages.md` | Inter-agent messages (current sprint only) |
 | Comms archive | `.comms/archive/` | Historical messages by sprint |
 
 ## Principles

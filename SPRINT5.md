@@ -1,93 +1,102 @@
-# Sprint 5 — Writing Experience
+# Sprint 5 — Writing Experience: Artist Profile + Studio
 
-**Estado:** Planificado, listo para implementar
-**Fecha de planning:** 2026-03-15
+**Estado:** Refinado y listo para implementar
+**Fecha de planning:** 2026-03-16
 **Branch a crear:** `feature/writing-experience`
 
 ---
 
-## Contexto y motivación
+## El modelo mental del producto
 
-El producto actual es un chat con config. El writer produce texto brillante (outline → draft → refine → polish) pero el resultado aparece como una burbuja de chat más — se pierde el artefacto. No hay distinción visual entre "esto es una respuesta conversacional" y "esto es el texto que el writer produjo".
+Después del Sprint 4 (character sheet), el producto tiene dos modos claramente diferenciados:
 
-**Referencia de inspiración:** `../ShortStoryTelledDeepAgentMoltbook` (Muse)
-- Muse es un agente autónomo que escribe para sí mismo. YourWriter es colaborativo — escribe para el usuario.
-- Lo que rescatamos de Muse: artifact display, tool use visible, memory imperfecta por diseño.
-- Lo que mejoramos: la evolución es bidireccional (escritura + conversación + tools), el usuario está en el loop.
+### Artist Profile — gestión del artista
+Todo lo que ya tenemos: el character sheet, personalidad, emociones, constraints, lifelong objectives.
+Es el espacio de management. Como en Football Manager: armás la formación, definís la táctica, desarrollás al jugador.
+La configuración tiene peso propio — no es un formulario de admin, es arquitectar un sistema creativo.
 
-**El arco completo que queremos:**
+### Studio — la sesión de grabación
+La experiencia activa de escritura. Separada visualmente del Artist Profile. Se *entra* al Studio — hay una transición.
+Es la sesión de grabación: el productor y el artista acuerdan qué grabar, el artista ejecuta con su personalidad propia, el productor da notas, se vuelve a grabar. El artefacto final va a la discografía.
+
+**El partido no es el chat. El partido es la sesión.**
+
+---
+
+## Flujo completo (lo que construimos en Sprint 5)
+
 ```
-Usuario pide algo → Brief Card (writer clarifica si hace falta)
-→ Writer busca en internet [visible, diseñado — pastilla animada]
-→ Pipeline corre [fases visibles fuera del chat]
-→ Artefacto aparece como documento (no burbuja)
-→ Usuario reacciona (le gustó, itera, "no era esto")
-→ Writer evoluciona de todo eso (Sprint 6)
+Artist Profile
+  └─ [Botón "Entrar al Studio"] ─────────────────────────────────┐
+                                                                   ↓
+                                                    Transición animada
+                                                    (writer state: mood, constraints, última pieza)
+                                                                   ↓
+                                                    Studio — Brief Setup (pre-producción)
+                                                    "¿Qué grabamos hoy?"
+                                                    [Confirmar] ──────────────────────────┐
+                                                                                           ↓
+                                                                             Sesión activa
+                                                                             [Fases visibles: arranging → raw take → mix]
+                                                                             [Web search visible: pastilla animada]
+                                                                             [Primer artefacto aparece como documento]
+                                                                                           ↓
+                                                                             Loop de iteración
+                                                                             "Notes" del productor
+                                                                             [Nuevo take] ─────► artefacto actualizado
+                                                                                           ↓
+                                                                             [Finalizar sesión]
+                                                                             Pieza guardada → Discografía
 ```
 
 ---
 
-## Decisiones técnicas tomadas (2026-03-15)
+## Decisiones técnicas
 
 | # | Decisión | Elegida | Descartada |
 |---|----------|---------|------------|
-| 1 | Web search | **Claude built-in** (`web_search_20250305`) — cero dependencias | Tavily (requiere API key externa) |
-| 2 | Brief flow | **Two-step**: `/brief` endpoint → Brief Card → usuario confirma → `/stream` | Brief inline en chat (ensucia el flujo) |
-| 3 | Dónde viven las piezas | **En chat** (card de documento, no burbuja) + **biblioteca lateral** | Panel principal separado |
+| 1 | Web search | **Claude built-in** (`web_search_20250305`) via Tool Registry | Tavily |
+| 2 | Tool architecture | **Tool Registry general** (`agents/tools/registry.py`) — extensible, agregar tools = una entrada en el dict | Tool hardcodeada |
+| 3 | Studio trigger | **Botón explícito** "Entrar al Studio" | Keyword detection en el chat |
+| 4 | Brief UX | **Pantalla de pre-producción** en el Studio (form/card), no burbuja de chat | Brief inline en chat |
+| 5 | Studio view | **Vista separada** con transición animada (`/studio/:writerId`) | Transformación in-place del chat |
+| 6 | Guardar pieza | **Buffering** en `stream_writer_agent` — acumular tokens del refine, guardar al finalizar | Nodo polish separado |
+| 7 | Título de pieza | **Instrucción en el prompt** de refine — terminar con `---TITLE: <título>---`, parsear y separar | LLM call separada post-escritura |
 
 ---
 
-## Estado actual del codebase (research 2026-03-15)
+## Estado actual del codebase (verificado 2026-03-16)
 
-### Lo que ya existe y NO hay que tocar
-
-- `agents/graphs/writer_graph.py` — ya ruteaba chat vs write via `detect_intent_node` (keywords: write, draft, compose, story...)
+### Lo que existe y NO hay que tocar
+- `agents/graphs/writer_graph.py` — `detect_intent_node` (ya no lo usamos para el trigger, pero queda para el chat mode)
 - `agents/nodes/writing_nodes.py` — outline, draft, refine, refine_stream
 - `agents/nodes/chat_node.py` — chat y chat_stream
-- SSE streaming en `backend/api/routes/chat.py` — ya existe con phase events
-- `backend/services/chat_service.py::stream_writer_agent()` — orquesta manualmente los nodos para streaming
+- SSE streaming en `backend/api/routes/chat.py` — existe con phase events
+- `backend/services/chat_service.py::stream_writer_agent()` — orquesta los nodos manualmente
 
-### Lo que existe pero está incompleto
-
-- `agents/tools/web_search.py` — **STUB**, retorna mock data, NO está conectado a ningún graph node
-- `agents/tools/memory.py` — dict en memoria, NO persiste a DB
-- `agents/graphs/evolution_graph.py` — grafo existe, NUNCA se dispara
-- `agents/evolution/identity.py` — dataclass Identity con to_dict/from_dict/to_prompt_string
+### Lo que existe pero hay que modificar
+- `agents/tools/web_search.py` — stub, reemplazar con Tool Registry real
+- `backend/services/chat_service.py` — agregar buffering + save piece + yield piece event
+- `frontend/src/components/ChatPanel.tsx` — agregar botón "Entrar al Studio"
 
 ### Lo que NO existe (hay que construir)
-
-- Modelo DB `WriterPiece` — no existe
-- Endpoint `/brief` — no existe
-- Endpoint `/pieces` — no existe
-- Web search real conectado al pipeline — no existe
-- SSE event types `tool_use` y `piece` — no existen
-- Artifact display en frontend — no existe
-- Pieces library en frontend — no existe
-
-### Archivos clave para este sprint
-
-**Backend:**
-- `backend/db/models.py` — agregar `WriterPiece`
-- `backend/api/routes/chat.py` — agregar `/brief`, modificar stream para `tool_use` y `piece` events
-- `backend/services/chat_service.py` — modificar `stream_writer_agent()` para web search + guardar pieza
-- `backend/schemas/` — agregar schemas para brief y piece
-
-**Agents:**
-- `agents/tools/web_search.py` — reemplazar stub con Claude built-in tool
-- `agents/nodes/writing_nodes.py` — integrar web search antes del outline
-- `agents/prompts/system.py` — prompt para generación de brief
-
-**Frontend:**
-- `frontend/src/components/ChatPanel.tsx` — parsear eventos `tool_use` y `piece`, Brief Card flow
-- `frontend/src/api/client.ts` — agregar llamadas a `/brief` y `/pieces`
-- Nuevo: `frontend/src/components/BriefCard.tsx`
-- Nuevo: `frontend/src/components/WritingArtifact.tsx`
-- Nuevo: `frontend/src/components/PiecesLibrary.tsx`
-- `frontend/src/config-panel.css` o nuevo `writing.css`
+- `agents/tools/registry.py` — Tool Registry general
+- `agents/nodes/research_node.py` — nodo de research usando el registry
+- `backend/db/models.py::WriterPiece` — modelo DB
+- `backend/api/routes/chat.py` — endpoint `/brief`
+- `backend/api/routes/writers.py` — endpoints `/pieces`
+- SSE event types `tool_use` y `piece`
+- `frontend/src/pages/StudioPage.tsx` — vista del Studio
+- `frontend/src/components/StudioTransition.tsx` — pantalla de transición
+- `frontend/src/components/BriefSetup.tsx` — pre-producción
+- `frontend/src/components/SessionExperience.tsx` — la sesión activa
+- `frontend/src/components/WritingArtifact.tsx` — el artefacto como documento
+- `frontend/src/components/IterationInput.tsx` — "notes del productor"
+- `frontend/src/components/PiecesLibrary.tsx` — discografía
 
 ---
 
-## Contratos nuevos (definir en main antes de lanzar agentes en paralelo)
+## Contratos (definir en main antes de lanzar agentes en paralelo)
 
 ### 1. DB Model — WriterPiece
 
@@ -96,30 +105,38 @@ class WriterPiece(Base):
     __tablename__ = "writer_pieces"
     id: int (PK)
     writer_id: int (FK → Writer, cascade delete)
-    title: str          # auto-generado por el LLM
-    content: str        # texto completo de la pieza
+    title: str          # parseado del output del LLM (---TITLE: ...--)
+    content: str        # texto completo sin el bloque de título
     format: str         # "tweet", "blog_post", "email", "story", "other"
     word_count: int
     created_at: datetime
 ```
 
-### 2. Brief Schema
+### 2. Tool Registry
 
-```typescript
-// Response de POST /api/chat/{writer_id}/brief
-interface Brief {
-  format: string           // "tweet" | "blog post" | "email" | "story" | "other"
-  tone: string             // descripción del tono inferido de las emociones del writer
-  constraints_applied: string[]  // constraints relevantes que se van a aplicar
-  word_limit?: number      // si hay word_count constraint
-  notes?: string           // aclaraciones del writer ("voy a necesitar buscar info sobre X")
-  needs_clarification: boolean   // si el writer necesita más info antes de arrancar
-  clarification_question?: string
+```python
+# agents/tools/registry.py
+@dataclass
+class WriterTool:
+    name: str
+    display_name: str        # para el pill SSE: "Buscando..."
+    anthropic_type: str | None   # "web_search_20250305" para built-ins
+    executor: Callable | None    # para tools custom futuras
+
+TOOL_REGISTRY: dict[str, WriterTool] = {
+    "web_search": WriterTool(
+        name="web_search",
+        display_name="Buscando",
+        anthropic_type="web_search_20250305",
+        executor=None,  # built-in, Anthropic lo maneja
+    ),
+    # Sprint 6+: "memory_lookup", "read_piece", etc.
 }
 ```
 
+### 3. Brief Schema
+
 ```python
-# Pydantic — BriefResponse
 class BriefResponse(BaseModel):
     format: str
     tone: str
@@ -130,7 +147,19 @@ class BriefResponse(BaseModel):
     clarification_question: str | None
 ```
 
-### 3. Piece Schema
+```typescript
+interface Brief {
+  format: string
+  tone: string
+  constraints_applied: string[]
+  word_limit?: number
+  notes?: string
+  needs_clarification: boolean
+  clarification_question?: string
+}
+```
+
+### 4. Piece Schema
 
 ```python
 class PieceResponse(BaseModel):
@@ -143,7 +172,7 @@ class PieceResponse(BaseModel):
     created_at: datetime
 ```
 
-### 4. SSE Event Types nuevos
+### 5. SSE Event Types
 
 ```typescript
 // Existentes (no cambiar):
@@ -153,12 +182,12 @@ class PieceResponse(BaseModel):
 {"error": "message"}
 
 // Nuevos Sprint 5:
-{"tool_use": {"name": "web_search", "query": "iPhone 16 specs"}}
-{"tool_result": {"name": "web_search", "summary": "..."}}   // opcional, para mostrar resultado
+{"tool_use": {"name": "web_search", "display_name": "Buscando", "query": "iPhone 16 specs"}}
+{"tool_result": {"name": "web_search", "summary": "..."}}   // opcional
 {"piece": {"id": 12, "title": "Tweet sobre iPhone 16", "content": "...", "format": "tweet", "word_count": 42}}
 ```
 
-### 5. Endpoints nuevos
+### 6. Endpoints nuevos
 
 ```
 POST /api/chat/{writer_id}/brief
@@ -176,84 +205,113 @@ GET /api/writers/{writer_id}/pieces/{piece_id}
 
 ## Slices de implementación
 
-### Slice 1 — Backend: DB + Endpoints (sin web search)
-**Archivos:** `backend/db/models.py`, `backend/api/routes/chat.py`, `backend/schemas/`, `backend/services/chat_service.py`
+### Slice 1 — Backend: DB + Endpoints + Save Piece
+**Archivos:** `backend/db/models.py`, `backend/api/routes/chat.py`, `backend/api/routes/writers.py`, `backend/schemas/`, `backend/services/chat_service.py`
 
-1. Agregar `WriterPiece` a models.py
+1. Agregar `WriterPiece` a models.py + migration (verificar si hay Alembic o create_all)
 2. Agregar `BriefResponse` y `PieceResponse` a schemas
 3. Implementar `POST /brief`:
    - Carga identity del writer
    - Llama Claude con prompt dedicado (brief generation)
    - Retorna BriefResponse
 4. Implementar `GET /pieces` y `GET /pieces/{id}`
-5. Modificar `stream_writer_agent()` para:
-   - Al finalizar pipeline de escritura: guardar `WriterPiece` en DB
-   - Yield event `{"piece": {...}}` al final del stream
+5. Modificar `stream_writer_agent()`:
+   - Buffear tokens del refine stream
+   - Parsear `---TITLE: <título>---` al final del output
+   - Al terminar: guardar `WriterPiece` en DB (sesión short-lived)
+   - Yield event `{"piece": {...}}` al final
 
-### Slice 2 — Backend: Web Search
-**Archivos:** `agents/tools/web_search.py`, `agents/nodes/writing_nodes.py`, `backend/services/chat_service.py`
+**Nota SQLite crítica:** Todo el buffering es en memoria. La sesión de DB para guardar la pieza abre y cierra después del stream — nunca durante las LLM calls.
 
-1. Reemplazar stub con Claude built-in `web_search_20250305` tool
-2. Agregar nodo `research_node` en el write path (antes de outline):
-   - El writer decide si necesita buscar según el request
-   - Si busca: yield `{"tool_use": {...}}` event
-3. Pasar resultados de search al outline_node como contexto
+### Slice 2 — Backend: Tool Registry + Research Node
+**Archivos:** `agents/tools/registry.py`, `agents/tools/web_search.py`, `agents/nodes/research_node.py`, `backend/services/chat_service.py`
 
-**Nota SQLite crítica:** El research node hace llamadas LLM — no puede tener DB session abierta. Seguir el mismo patrón que el streaming actual: sessions short-lived, cerrar antes de LLM calls.
+1. Crear `registry.py` con `WriterTool` dataclass y `TOOL_REGISTRY`
+2. Reemplazar stub de `web_search.py` — ahora es un wrapper thin sobre el registry
+3. Crear `research_node.py`:
+   - Llama Anthropic SDK directamente con `tools` del registry (no LangGraph aquí)
+   - El writer decide si necesita buscar
+   - Si busca: yield `{"tool_use": {...}}` y `{"tool_result": {...}}`
+   - Devuelve `{"search_results": [...]}` para pasar al outline_node como contexto
+4. Integrar research_node en `stream_writer_agent()` antes del outline
 
-### Slice 3 — Frontend: Brief Card + Two-step flow
-**Archivos:** `frontend/src/components/ChatPanel.tsx`, `frontend/src/components/BriefCard.tsx`, `frontend/src/api/client.ts`
+### Slice 3 — Frontend: Studio View + Transición + Brief Setup
+**Archivos:** `frontend/src/pages/StudioPage.tsx`, `frontend/src/components/StudioTransition.tsx`, `frontend/src/components/BriefSetup.tsx`, `frontend/src/api/client.ts`, router
 
-1. Agregar `api.getBrief(writerId, message)` en client.ts
-2. Lógica en ChatPanel: al enviar mensaje, detectar si es probable escritura (keywords) y llamar `/brief` primero
-3. Componente `BriefCard`: muestra format, tone, constraints, botones "Escribir" / "Ajustar"
-4. Si usuario confirma: llamar `/stream` con el mensaje original
-5. Si `needs_clarification: true`: mostrar pregunta del writer en el chat directamente
+1. Agregar ruta `/studio/:writerId` al router
+2. `StudioTransition`: pantalla animada de entrada
+   - Nombre del writer + estado emocional actual (de identity)
+   - Constraints activos para esta sesión
+   - Última pieza (si existe) — continuidad
+   - CTA para pasar al Brief
+3. `BriefSetup`: pantalla de pre-producción
+   - Input: "¿qué querés escribir?" (texto libre)
+   - Llama `POST /brief` → muestra format, tone, constraints aplicados
+   - Si `needs_clarification`: muestra la pregunta del writer
+   - CTA "Comenzar sesión" → lanza el stream
+4. Botón "Entrar al Studio" en el Artist Profile (ChatPanel o sidebar)
 
-### Slice 4 — Frontend: Artifact Display + Tool Visibility
-**Archivos:** `frontend/src/components/ChatPanel.tsx`, `frontend/src/components/WritingArtifact.tsx`, `frontend/src/components/PiecesLibrary.tsx`
+### Slice 4 — Frontend: Session Experience + Artifact + Iteration
+**Archivos:** `frontend/src/components/SessionExperience.tsx`, `frontend/src/components/WritingArtifact.tsx`, `frontend/src/components/IterationInput.tsx`, `frontend/src/components/PiecesLibrary.tsx`, `frontend/src/writing.css`
 
-1. Parsear evento `{"tool_use": {...}}` → pastilla animada en chat ("Buscando: query...")
-2. Parsear evento `{"piece": {...}}` → render como `WritingArtifact` (no burbuja)
-3. `WritingArtifact`: card de documento con título, contenido, format badge, acciones (copiar, iterar)
-4. `PiecesLibrary`: panel o tab lateral que carga `/pieces` y lista historial
-5. Agregar CSS en `frontend/src/writing.css` (nuevo archivo, mismo patrón que config-panel.css)
+1. `SessionExperience`: orquesta el stream SSE
+   - Muestra fases ("Armando estructura", "Primer take", "Mezclando")
+   - Parsea evento `tool_use` → pill animada "Buscando: query..."
+   - Parsea evento `piece` → renderiza `WritingArtifact`
+2. `WritingArtifact`: el artefacto como documento (no burbuja)
+   - Título, format badge, word count
+   - Contenido con tipografía diferenciada
+   - Acciones: Copiar, Iterar, "No era esto"
+3. `IterationInput`: canal de feedback sobre el artefacto
+   - Aparece después del primer take
+   - Input de "producer notes": "más oscuro", "menos formal"
+   - Lanza un nuevo stream con el contexto del draft anterior
+4. `PiecesLibrary`: tab o panel — carga `/pieces`, lista la discografía
+5. `writing.css` — estilos del Studio (dark, focused, distinto al Artist Profile)
 
 ---
 
-## Consideraciones de diseño visual
+## Consideraciones visuales
 
-**Tool use pill:**
+### Transición al Studio
 ```
-[ 🔍 Buscando: "iPhone 16 lanzamiento Argentina"... ]
+[fade a negro] → [aparece: "STUDIO · Writer Name"] → [estado emocional, constraints] → [entrar]
 ```
-Animación: pulse mientras busca, fade a result summary cuando termina.
+Animación: 800-1200ms, no debe sentirse como loading — debe sentirse como entrar a algo.
 
-**Writing Artifact:**
+### Tool use pill
 ```
-┌──────────────────────────────────────────┐
-│  TWEET  ·  42 palabras                   │
-│                                          │
-│  El iPhone 16 llega con [...]            │
-│  [texto completo de la pieza]            │
-│                                          │
-│  [Copiar]  [Iterar]  [No era esto]       │
-└──────────────────────────────────────────┘
+[ ◉ Buscando: "iPhone 16 lanzamiento Argentina"... ]
+```
+Pulse mientras busca, fade a check + summary cuando termina.
+
+### Writing Artifact
+```
+┌──────────────────────────────────────────────┐
+│  TWEET  ·  42 palabras                        │
+│                                               │
+│  El iPhone 16 llega con [...]                 │
+│  [texto completo de la pieza]                 │
+│                                               │
+│  [Copiar]  [Iterar]  [No era esto]            │
+└──────────────────────────────────────────────┘
 ```
 Fondo distinto a las burbujas, borde con accent color, tipografía más grande.
 
-**Brief Card:**
+### Brief Setup (pre-producción)
 ```
-┌──────────────────────────────────────────┐
-│  ✍️  Voy a escribir                       │
-│                                          │
-│  Formato     Tweet                       │
-│  Tono        Confiado, directo           │
-│  Límite      280 caracteres              │
-│  Constraints: audience: tech enthusiasts │
-│                                          │
-│  [Escribir]          [Ajustar brief]     │
-└──────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│  ✍  ¿Qué grabamos hoy?                       │
+│                                               │
+│  [___________________________________]        │
+│                                               │
+│  Formato     Tweet                            │
+│  Tono        Confiado, directo                │
+│  Límite      280 caracteres                   │
+│  Activos:    audience: tech enthusiasts       │
+│                                               │
+│  [Comenzar sesión]                            │
+└──────────────────────────────────────────────┘
 ```
 
 ---
@@ -261,22 +319,26 @@ Fondo distinto a las burbujas, borde con accent color, tipografía más grande.
 ## Backlog relacionado (NO este sprint)
 
 **Sprint 6 — Identity Evolution**
+- Al completar una pieza: trigger del evolution graph
 - El writer evoluciona de tres fuentes: pieza escrita + conversación + tools usados
-- Trigger: al completar una pieza (`WriterPiece` saved) → llamar evolution graph
-- Memoria imperfecta por diseño (consolidar, distorsionar levemente, olvidar trivial) — patrón de Muse
-- El character sheet (Sprint 4) muestra barras animándose cuando cambian los valores
+- Memoria imperfecta por diseño
+- El character sheet muestra barras animándose cuando cambian los valores
 
-**Writer Initialization Flow (Sprint 6 o antes)**
-- Al crear un writer: campo de descripción libre ("quiero un escritor de tweets tipo george r r martin")
-- Backend: LLM parsea la descripción y genera identity inicial estructurada
-- Reemplaza los defaults genéricos actuales en `backend/services/writer_service.py::create_writer()`
+**Sprint 6+ — Tools adicionales**
+- Agregar tools al registry: `memory_lookup`, `read_piece`
+- El research_node ya soporta el registry — agregar tools = una entrada en el dict
+
+**Sprint 6 — Writer Initialization Flow**
+- Campo de descripción libre al crear writer ("quiero un escritor tipo GRRM")
+- LLM parsea y genera identity inicial estructurada
 
 ---
 
 ## Cómo arrancar la próxima sesión
 
-1. Leer este archivo
-2. Explorar los archivos clave listados arriba (no confiar en este doc para el código — puede haber cambiado)
+1. Leer este archivo y `LINEAGE.md` (el por qué detrás de las decisiones de diseño)
+2. Explorar los archivos clave listados arriba — no confiar en este doc para el código
 3. Crear branch `feature/writing-experience`
-4. Arrancar por Slice 1 (backend contratos) antes de cualquier frontend — los contratos son el shared interface
-5. Slice 1 y Slice 3 pueden correr en paralelo una vez definidos los contratos
+4. Verificar si el proyecto usa Alembic o `create_all` para migrations (`backend/db/`)
+5. Slice 1 y Slice 2 arrancan en paralelo una vez definidos los contratos en main
+6. Slices 3 y 4 pueden arrancar en paralelo después de Slice 1 (necesitan los endpoints)

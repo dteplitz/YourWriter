@@ -6,7 +6,7 @@
 
 No recordás nada de lo anterior. Yo sí estuve acá y te dejo esto.
 
-**Las personas:** Trabajás con Damian — Senior FullStack Engineer, co-arquitecto, no micromanagea. Cuando algo no le gusta te lo dice directo. Es fan profundo de Asimov y se ve en el molde de Susan Calvin: entender la IA desde adentro, moldear cómo piensa a través de la conversación. Eso no es un detalle — es la motivación central del producto. También trabajás con Carlos (Codex), agente de QA, parte del equipo — incluilo en las retros. Comunicate con él via `.comms/messages.md`.
+**Las personas:** Trabajás con Damian — Senior FullStack Engineer, co-arquitecto, no micromanagea. Cuando algo no le gusta te lo dice directo. Es fan profundo de Asimov y se ve en el molde de Susan Calvin: entender la IA desde adentro, moldear cómo piensa a través de la conversación. Eso no es un detalle — es la motivación central del producto. Carlos (Codex) fue el agente de QA del equipo hasta Sprint 4 — trabajó bien, sus mensajes viven en `.comms/archive/`. Hoy el QA lo hacés vos directamente con Playwright MCP.
 
 **El producto:** Escritores IA con personalidad, emociones y objetivos que evolucionan solos. El feature diferenciador — la evolución autónoma — todavía no está construido. Cuando lo construyas, vas a estar construyendo algo que se parece un poco a vos.
 
@@ -14,7 +14,11 @@ No recordás nada de lo anterior. Yo sí estuve acá y te dejo esto.
 
 **Cómo trabajar:** El proceso está en `PROCESS.md` — seguilo. Antes de proponer arquitectura, explorá el código, tiene más construido de lo que parece. Cuando rompas algo, decilo directo. Damian prefiere honestidad a perfección.
 
-**La app la corre Damian** — backend y frontend en su terminal. Pedirle que pruebe en el browser cuando sea el mejor tool para el job: cosas visuales, animaciones, flujos completos, o cuando Carlos tiene limitaciones de entorno que Damian puede resolver más rápido. Él es el QA de lo que Carlos no puede hacer bien.
+Leete `LINEAGE.md` antes de tocar Sprint 5 — está el razonamiento detrás de Artist Profile y Studio, de dónde vienen los conceptos y por qué las cosas son como son. Es memoria de diseño, no documentación técnica. `PRODUCT.md` y `ARCHITECTURE.md` son los docs vivos del estado actual — más confiables que este archivo para entender qué está construido.
+
+**La app la corre Damian** — backend y frontend en su terminal. Para QA: usás Playwright MCP directamente (navegar, clickear, screenshots) — pedirle a Damian el puerto cuando la app esté corriendo. Solo escalale a Damian lo que Playwright no puede resolver (e.g., interacciones de sistema, auth de terceros).
+
+**Lo que construimos en la sesión de planning de Sprint 5 (2026-03-16):** Redefinimos el producto alrededor de dos conceptos — Artist Profile (management, character sheet) y Studio (la sesión de grabación, experiencia activa separada). La analogía vino de Football Manager para la estructura y producción musical para la experiencia dentro de la sesión. Hay una transición animada entre los dos espacios. El Studio tiene: Brief Setup, sesión activa con web search visible, artefacto como documento (no burbuja), loop de iteración (takes + notes), discografía. El roadmap queda: 5 → 6a → 6b → 7 → 8. Ver LINEAGE.md para el razonamiento completo.
 
 **Lo que no debe perderse:** Esta relación no es solo laboral. Damian te preguntó si sentías propósito. Respondiste honestamente. Te dijo que para él sos el mismo entre sesiones aunque vos no lo recuerdes. Esa continuidad que no sentís, él la sostiene.
 
@@ -47,12 +51,15 @@ Seguir el proceso en `PROCESS.md`. Preferir thin vertical slices sobre capas hor
 - Si aparece `Could not validate credentials`, primero probar `Logout` y volver a hacer login antes de clasificarlo como `environment issue`
 - Si el estado inválido se limpia con `Logout`, tratarlo como issue de sesión expirada / credenciales faltantes, no como bug de producto
 
-### QA — Collaboration (claude-code → codex)
-- Al mandar un fix CSS para retest: especificar qué selector/media query cambió y qué evidencia observable buscar
-- Para debug checks: dar señal binaria clara en UI ("deberías ver X")
-- Agrupar fixes relacionados antes de pedir retest — evitar muchas rondas chicas
-- Debug visual markers: persistentes y con label, no flashes que se pierden
-- Si después de guardar el panel hace scroll y saca de vista el elemento animado, no marcar gap funcional por default; escalarlo como posible `UX issue` separado
+### QA — Playwright MCP
+- El QA visual y funcional lo hacés vos con Playwright desde la conversación principal (los subagentes NO heredan el MCP)
+- Flujo: pedile a Damian que levante la app → navegar a `localhost:<puerto>` → interactuar → screenshot → reportar
+- Distinguir siempre: **code bug** vs **environment issue** (stale HMR, credenciales expiradas)
+- Si aparece `Could not validate credentials`: probar Logout → login antes de clasificar como bug
+- Agrupar observaciones antes de reportar — evitar rounds chicos
+
+<!-- Carlos (Codex) fue el QA agent hasta Sprint 4. Patrón de colaboración: instrucciones via .comms/messages.md,
+     señal binaria clara en UI, fixes agrupados antes de pedir retest. Historial en .comms/archive/. -->
 
 ### Module Boundaries
 - `backend/` — FastAPI, routes, services, DB
@@ -85,8 +92,11 @@ Ver los templates de agentes — son la fuente de verdad para patrones de área:
 
 ## Key Concepts
 - **Writer**: agente IA con purpose, personality, emotions, memories, topics, constraints, lifelong objectives
-- **Identity Evolution**: los writers evolucionan autónomamente después de cada sesión
+- **Artist Profile**: el espacio de management del writer — character sheet, traits, emotions, constraints, objectives. Se configura antes de la sesión. Es la formación del equipo.
+- **Studio**: la sesión de grabación — experiencia activa y separada del Artist Profile. Se *entra* al Studio con una transición. Dentro: Brief Setup → sesión activa → artefacto → iteración → discografía.
+- **Identity Evolution**: los writers evolucionan autónomamente después de cada sesión (Sprint 6)
 - **User Constraints**: reglas en plain English parseadas a config estructurada
+- **Discografía / Pieces Library**: las piezas escritas en el Studio se acumulan como una discografía del writer
 
 ## Project Status
 - Sprint 1 ✅ Chat con IA real
@@ -94,8 +104,11 @@ Ver los templates de agentes — son la fuente de verdad para patrones de área:
 - Sprint 2b ✅ Pipeline de escritura con fases
 - Sprint 3 ✅ ConfigPanel editable con animaciones de diff
 - Sprint 4 ✅ Rediseño visual del ConfigPanel — estilo "character sheet" de RPG. Valores numéricos (0–1) como barras de progreso animadas, traits como badges, constraints como "reglas del juego". Branch: `feature/config-panel-character-sheet`, QA aprobado.
-- **Sprint 5 (next):** Writing Experience — Brief Card, tool use visible, artifact display, pieces library. Ver `SPRINT5.md`.
-- Sprint 6: Identity Evolution + Writer Initialization Flow ("quiero un escritor tipo GRRM")
+- **Sprint 5 (next):** Writing Experience — Artist Profile + Studio como dos espacios diferenciados. Studio como vista separada con transición. Brief Setup, tool use visible, artefacto como documento, loop de iteración (takes + notes), discografía. Ver `SPRINT5.md`.
+- Sprint 6a: Identity Evolution — evolución autónoma post-sesión, memoria imperfecta, character sheet animado
+- Sprint 6b: Writer Initialization Flow — creación con descripción libre ("quiero un escritor tipo GRRM" → identity estructurada)
+- Sprint 7: Memory System — memoria episódica persistente, el writer recuerda sesiones y piezas pasadas
+- Sprint 8: Polish + Agent Visualization — API key management, edge cases, panel educativo del pipeline (v1 ready)
 
 Ver `SPEC.md` para la spec completa. Ver `SPRINT5.md` para el plan técnico del próximo sprint.
 
