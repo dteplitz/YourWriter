@@ -4,9 +4,10 @@ import * as api from '../api/client';
 
 interface ChatPanelProps {
   writerId: string;
+  onEnterStudio?: () => void;
 }
 
-export default function ChatPanel({ writerId }: ChatPanelProps) {
+export default function ChatPanel({ writerId, onEnterStudio }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -102,6 +103,14 @@ export default function ChatPanel({ writerId }: ChatPanelProps) {
     <div className="chat-panel">
       <div className="chat-header">
         <h3>Chat</h3>
+        {onEnterStudio && (
+          <button
+            className="btn btn-primary studio-enter-btn"
+            onClick={onEnterStudio}
+          >
+            Studio →
+          </button>
+        )}
       </div>
       <div className="chat-messages">
         {messages.length === 0 && (

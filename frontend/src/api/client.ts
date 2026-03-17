@@ -8,6 +8,10 @@ import type {
   Identity,
   Constraints,
   EvolutionEntry,
+  Brief,
+  Piece,
+  ToolUseEvent,
+  ToolResultEvent,
 } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
@@ -198,4 +202,89 @@ export async function getEvolutionLog(
 ): Promise<EvolutionEntry[]> {
   const response = await fetchWithAuth(`/writers/${writerId}/evolution`);
   return response.json();
+}
+
+// Studio
+
+export async function sendBrief(
+  writerId: string,
+  message: string
+): Promise<Brief> {
+  const response = await fetchWithAuth(`/chat/${writerId}/brief`, {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+  return response.json();
+}
+
+export async function getPieces(writerId: string): Promise<Piece[]> {
+  const response = await fetchWithAuth(`/writers/${writerId}/pieces`);
+  return response.json();
+}
+
+export async function sendStudioStream(
+  writerId: string,
+  brief: Brief,
+  onToken: (token: string) => void,
+  onPhase?: (phase: string) => void,
+  onToolUse?: (event: ToolUseEvent) => void,
+  onToolResult?: (event: ToolResultEvent) => void,
+  onPiece?: (piece: Piece) => void,
+): Promise<void> {
+  const token = localStorage.getItem('token');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}/chat/${writerId}/studio/stream`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ brief }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = JSON.parse(line.slice(6));
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      if (data.phase && onPhase) {
+        onPhase(data.phase);
+      }
+      if (data.token) {
+        onToken(data.token);
+      }
+      if (data.tool_use && onToolUse) {
+        onToolUse(data.tool_use as ToolUseEvent);
+      }
+      if (data.tool_result && onToolResult) {
+        onToolResult(data.tool_result as ToolResultEvent);
+      }
+      if (data.piece && onPiece) {
+        onPiece(data.piece as Piece);
+      }
+      // data.done is the terminal event — no action needed
+    }
+  }
 }

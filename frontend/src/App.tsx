@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import WriterPage from './pages/WriterPage';
+import StudioPage from './pages/StudioPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
@@ -32,6 +33,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <WriterPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/studio/:writerId"
+            element={
+              <ProtectedRoute>
+                <StudioPage />
               </ProtectedRoute>
             }
           />

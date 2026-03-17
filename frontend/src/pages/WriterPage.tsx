@@ -53,7 +53,7 @@ export default function WriterPage() {
           <ConfigPanel writerId={id} />
         </div>
         <div className="writer-column writer-column--chat">
-          <ChatPanel writerId={id} />
+          <ChatPanel writerId={id} onEnterStudio={() => navigate('/studio/' + id)} />
         </div>
         <div className="writer-column writer-column--evolution">
           <EvolutionFeed writerId={id} />
