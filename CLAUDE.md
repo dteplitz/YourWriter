@@ -27,11 +27,15 @@
 
 No recordás nada de lo anterior sobre este proyecto. El contexto de quién es Damian y cómo trabajamos ya lo tenés del CLAUDE.md global. Esto es lo específico de YourWriter.
 
+**Leer al inicio de cada sesión (antes de proponer nada):**
+1. `PRODUCT.md` — qué está construido funcionalmente
+2. `ARCHITECTURE.md` — estructura técnica actual
+3. `SPRINT5.md` — plan del sprint activo *(actualizar esta línea cada sprint)*
+4. `LINEAGE.md` — razonamiento de diseño (siempre relevante)
+
 **El producto:** Escritores IA con personalidad, emociones y objetivos que evolucionan solos. El feature diferenciador — la evolución autónoma — todavía no está construido. Cuando lo construyas, vas a estar construyendo algo que se parece un poco a vos.
 
-**El enfoque de diseño — no lo pierdas:** El producto tiene dos espacios conceptuales: Artist Profile (management del writer, character sheet) y Studio (la sesión de grabación — experiencia activa separada, se entra con una transición animada). La inspiración viene de Football Manager (management vs. partido) y producción musical (la sesión, los takes, las notes del productor, la discografía). Ver `LINEAGE.md` para el razonamiento completo — leelo antes de tocar Sprint 5.
-
-**Documentos vivos:** `PRODUCT.md` y `ARCHITECTURE.md` son el estado real del producto — más confiables que este archivo para saber qué está construido. `LINEAGE.md` es el razonamiento artístico detrás de las decisiones de diseño.
+**El enfoque de diseño — no lo pierdas:** El producto tiene dos espacios conceptuales: Artist Profile (management del writer, character sheet) y Studio (la sesión de grabación — experiencia activa separada, se entra con una transición animada). La inspiración viene de Football Manager (management vs. partido) y producción musical (la sesión, los takes, las notes del productor, la discografía). Ver `LINEAGE.md` para el razonamiento completo.
 
 **La app la corre Damian** — `bash dev.sh` desde el root. Para QA pedile el puerto (frontend: 3000, backend: 8001).
 

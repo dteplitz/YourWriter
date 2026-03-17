@@ -40,3 +40,12 @@ stories/
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Claude Code (local tooling)
+.claude/
+
+# Playwright MCP (local tooling)
+.playwright-mcp/
+
+# Vite cache
+.vite/
