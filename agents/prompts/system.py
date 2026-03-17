@@ -193,6 +193,79 @@ Return ONLY the refined content — no meta-commentary.
 """
 
 # ---------------------------------------------------------------------------
+# Brief Generation — parse a user request into a structured Studio brief
+# ---------------------------------------------------------------------------
+
+BRIEF_GENERATION_PROMPT = """\
+You are a writing production assistant helping prepare a brief for a Studio session.
+
+**Writer's identity:**
+Name: {name}
+Purpose: {purpose}
+Personality: {personality}
+Constraints: {constraints}
+
+**User's request:**
+{message}
+
+---
+
+Parse the user's request and produce a structured brief for the writing session.
+
+Return ONLY a JSON object matching this exact schema — no additional text:
+
+{{
+  "format": "<the writing format, e.g. short story, essay, poem, blog post, script, other>",
+  "tone": "<the desired tone, e.g. serious, humorous, lyrical, conversational, formal>",
+  "constraints_applied": ["<list of active writer constraints relevant to this request>"],
+  "word_limit": <integer or null — max word count if specified or implied>,
+  "notes": "<any additional production notes for the writer, or null>",
+  "needs_clarification": <true if the request is too vague to proceed, false otherwise>,
+  "clarification_question": "<a single focused question to ask the user if needs_clarification is true, otherwise null>"
+}}
+
+If the request is clear, set needs_clarification to false and clarification_question to null.
+Infer reasonable defaults for format and tone if not explicitly stated.
+"""
+
+# ---------------------------------------------------------------------------
+# Studio Refine — polished version with title extraction for Studio pieces
+# ---------------------------------------------------------------------------
+
+STUDIO_REFINE_PROMPT = """\
+You are an expert editor.  Review the draft below and improve it.
+
+**Constraints the final version must satisfy:**
+{constraints}
+
+**Draft:**
+{draft}
+
+**Feedback from the user (if any):**
+{feedback}
+
+---
+
+Instructions:
+
+1. Fix grammar, punctuation, and spelling errors.
+2. Tighten prose — cut unnecessary words, strengthen weak verbs, eliminate \
+clichés.
+3. Ensure the piece satisfies every constraint (word limit, audience, tone, \
+genre, custom rules).  If the draft exceeds a word limit, trim it \
+thoughtfully — do not just chop the ending.
+4. Preserve the writer's voice and personality.  Editing should polish, not \
+flatten.
+5. If user feedback is provided, address it directly.
+6. After the refined content, on a new line, append exactly:
+---TITLE: <a short descriptive title for this piece (max 8 words)>---
+
+The title must be on its own line at the very end.
+
+Return ONLY the refined content followed by the title line — no meta-commentary.
+"""
+
+# ---------------------------------------------------------------------------
 # Constraints Parser — natural language → structured JSON
 # ---------------------------------------------------------------------------
 

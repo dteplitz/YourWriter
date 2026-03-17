@@ -1,11 +1,13 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.auth import get_current_user
 from backend.db.database import get_db
-from backend.db.models import User
+from backend.db.models import User, WriterPiece
+from backend.schemas.studio import PieceResponse
 from backend.schemas.writer import WriterCreate, WriterResponse, WriterUpdate, WriterWithIdentity
 from backend.schemas.identity import IdentityResponse
 from backend.services.writer_service import (
@@ -83,3 +85,46 @@ async def delete_writer_endpoint(
 ) -> None:
     """Delete a writer and all associated data."""
     await delete_writer(db, writer_id=writer_id, user_id=current_user.id)
+
+
+@router.get("/{writer_id}/pieces", response_model=list[PieceResponse])
+async def list_pieces(
+    writer_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> list[PieceResponse]:
+    """Return all pieces (discography) for a writer."""
+    await get_writer(db, writer_id=writer_id, user_id=current_user.id)
+
+    result = await db.execute(
+        select(WriterPiece)
+        .where(WriterPiece.writer_id == writer_id)
+        .order_by(WriterPiece.created_at.desc())
+    )
+    pieces = result.scalars().all()
+    return [PieceResponse.model_validate(p) for p in pieces]
+
+
+@router.get("/{writer_id}/pieces/{piece_id}", response_model=PieceResponse)
+async def get_piece(
+    writer_id: int,
+    piece_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> PieceResponse:
+    """Return a single piece by ID, verifying writer ownership."""
+    await get_writer(db, writer_id=writer_id, user_id=current_user.id)
+
+    result = await db.execute(
+        select(WriterPiece).where(
+            WriterPiece.id == piece_id,
+            WriterPiece.writer_id == writer_id,
+        )
+    )
+    piece = result.scalar_one_or_none()
+    if piece is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Piece not found",
+        )
+    return PieceResponse.model_validate(piece)

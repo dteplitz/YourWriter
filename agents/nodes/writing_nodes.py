@@ -18,6 +18,7 @@ from agents.prompts.system import (
     OUTLINE_PROMPT,
     WRITER_SYSTEM_PROMPT,
     REFINE_PROMPT,
+    STUDIO_REFINE_PROMPT,
 )
 from agents.tools.constraints import (
     format_constraints_for_prompt,
@@ -160,6 +161,66 @@ async def refine_node(state: dict[str, Any]) -> dict[str, Any]:
 async def refine_node_stream(state: dict[str, Any]) -> AsyncIterator[str]:
     """Stream the refine step token-by-token."""
     system, user_msg = _build_refine_prompt(state)
+    client = anthropic.AsyncAnthropic()
+    async with client.messages.stream(
+        model="claude-sonnet-4-20250514",
+        max_tokens=8192,
+        system=system,
+        messages=[{"role": "user", "content": user_msg}],
+    ) as stream:
+        async for text in stream.text_stream:
+            yield text
+
+
+# ---------------------------------------------------------------------------
+# Studio Refine (streaming) — same as refine_node_stream but uses
+# STUDIO_REFINE_PROMPT which appends ---TITLE: <title>--- at the end
+# ---------------------------------------------------------------------------
+
+def _build_studio_refine_prompt(state: dict[str, Any]) -> tuple[str, str]:
+    """Build the system prompt and user message for the Studio refine step.
+
+    Returns (system_prompt, user_message).
+    """
+    identity: dict[str, Any] = state.get("identity", {})
+    constraints = identity.get("constraints", {})
+    draft = state.get("draft", "")
+
+    validation = validate_constraints(draft, constraints)
+    feedback_parts: list[str] = []
+
+    if validation["violations"]:
+        feedback_parts.append(
+            "CONSTRAINT VIOLATIONS (must fix):\n"
+            + "\n".join(f"  - {v}" for v in validation["violations"])
+        )
+    if validation["warnings"]:
+        feedback_parts.append(
+            "Warnings (review):\n"
+            + "\n".join(f"  - {w}" for w in validation["warnings"])
+        )
+
+    feedback_text = "\n\n".join(feedback_parts) if feedback_parts else "None."
+
+    prompt = STUDIO_REFINE_PROMPT.format(
+        constraints=format_constraints_for_prompt(constraints),
+        draft=draft,
+        feedback=feedback_text,
+    )
+
+    return (
+        "You are a meticulous editor.  Improve the writing while preserving voice.",
+        prompt,
+    )
+
+
+async def studio_refine_node_stream(state: dict[str, Any]) -> AsyncIterator[str]:
+    """Stream the Studio refine step token-by-token.
+
+    Uses STUDIO_REFINE_PROMPT which appends ---TITLE: <title>--- at the very
+    end of the output so the caller can extract a title for the saved piece.
+    """
+    system, user_msg = _build_studio_refine_prompt(state)
     client = anthropic.AsyncAnthropic()
     async with client.messages.stream(
         model="claude-sonnet-4-20250514",
