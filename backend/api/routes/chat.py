@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,8 +12,18 @@ from backend.auth.auth import get_current_user
 from backend.db.database import async_session, get_db
 from backend.db.models import ChatMessage, MessageRole, User
 from backend.schemas.chat import ChatMessageCreate, ChatMessageResponse
-from backend.services.chat_service import invoke_writer_agent, stream_writer_agent
+from backend.schemas.studio import BriefRequest, BriefResponse
+from backend.services.chat_service import (
+    generate_brief,
+    invoke_writer_agent,
+    stream_studio_session,
+    stream_writer_agent,
+)
 from backend.services.writer_service import get_writer
+
+
+class StudioStreamRequest(BaseModel):
+    brief: BriefResponse
 
 logger = logging.getLogger(__name__)
 
@@ -143,3 +154,71 @@ async def get_history(
     )
     messages = result.scalars().all()
     return [ChatMessageResponse.model_validate(m) for m in messages]
+
+
+@router.post("/{writer_id}/brief", response_model=BriefResponse)
+async def generate_brief_endpoint(
+    writer_id: int,
+    body: BriefRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> BriefResponse:
+    """Parse a free-text request into a structured Studio brief."""
+    writer = await get_writer(db, writer_id=writer_id, user_id=current_user.id)
+    try:
+        return await generate_brief(writer, body.message)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception:
+        logger.exception("Brief generation failed for writer %s", writer_id)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate brief. Please try again.",
+        )
+
+
+@router.post("/{writer_id}/studio/stream", status_code=200)
+async def studio_stream(
+    writer_id: int,
+    body: StudioStreamRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> StreamingResponse:
+    """Stream a full Studio writing session (outline → draft → refine) via SSE.
+
+    Does NOT use Depends(get_db) — the service manages its own short-lived
+    sessions.  The LLM pipeline can take 30-90s; holding SQLite open that
+    long blocks all other writes.
+
+    Piece saving is handled inside stream_studio_session; this generator
+    only forwards tokens and event dicts to the client.
+    """
+    # Short-lived session: auth check + load writer
+    async with async_session() as db:
+        writer = await get_writer(db, writer_id=writer_id, user_id=current_user.id)
+
+    brief = body.brief
+
+    async def event_generator():
+        try:
+            async for chunk in stream_studio_session(writer, brief):
+                if isinstance(chunk, dict):
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                else:
+                    yield f"data: {json.dumps({'token': chunk})}\n\n"
+
+            yield f"data: {json.dumps({'done': True})}\n\n"
+        except RuntimeError as exc:
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+        except Exception:
+            logger.exception("Studio streaming failed for writer %s", writer_id)
+            yield f"data: {json.dumps({'error': 'Failed to generate content. Please try again.'})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
