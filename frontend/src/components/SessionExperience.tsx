@@ -3,7 +3,7 @@ import type { SessionExperienceProps, Piece, ToolUseEvent } from '../types/studi
 import * as api from '../api/client';
 import WritingArtifact from './WritingArtifact';
 import IterationInput from './IterationInput';
-import './session.css';
+import '../session.css';
 
 type SessionState = 'streaming' | 'artifact' | 'done';
 

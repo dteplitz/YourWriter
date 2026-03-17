@@ -405,9 +405,9 @@ a {
 .writer-page {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .writer-page-loading {
@@ -416,35 +416,142 @@ a {
   color: var(--text-secondary);
 }
 
+/* Sticky wrapper: header row + collapsible RPG strip */
+.writer-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
 .writer-page-header {
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 0.75rem 1.5rem;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
+}
+
+.writer-page-header-info {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.writer-page-header-info h2 {
   flex-shrink: 0;
 }
 
 .writer-purpose {
   font-size: 0.875rem;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.writer-page-content {
+/* RPG stats strip — slides in when config hero is out of view */
+.writer-rpg-strip {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 1.5rem;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  border-top: 1px solid transparent;
+  transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease,
+    border-color 0.25s ease;
+  flex-wrap: wrap;
+}
+
+.writer-rpg-strip--visible {
+  max-height: 44px;
+  opacity: 1;
+  padding: 0.4rem 1.5rem;
+  border-top-color: var(--border);
+}
+
+/* Emotion mini-stat inside the strip */
+.rpg-emotion-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.rpg-emotion-mini-label {
+  text-transform: capitalize;
+  min-width: 3rem;
+}
+
+.rpg-emotion-mini-bar {
+  width: 40px;
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.rpg-emotion-mini-fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(250, 204, 21, 0.4), var(--warning));
+  border-radius: 2px;
+}
+
+.rpg-emotion-mini-val {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  min-width: 1.5rem;
+}
+
+/* Trait chip in the RPG strip */
+.rpg-trait-chip {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 3px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border: 1px solid rgba(124, 111, 247, 0.2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Hero: Artist Profile */
+.writer-hero {
+  flex-shrink: 0;
+}
+
+/* Below the fold: Chat + Evolution */
+.writer-below-fold {
+  display: flex;
+  /* Fills the visible viewport after app-header (~56px) + writer-page-header (~52px) */
+  height: calc(100vh - 108px);
+  border-top: 2px solid var(--border);
+  flex-shrink: 0;
+}
+
+.writer-chat-col {
   flex: 1;
-  display: grid;
-  grid-template-columns: 280px 1fr 300px;
-  min-height: 0;
-}
-
-.writer-column {
-  overflow-y: auto;
+  min-width: 0;
+  overflow: hidden;
   border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
 }
 
-.writer-column:last-child {
-  border-right: none;
+.writer-evolution-col {
+  width: 300px;
+  flex-shrink: 0;
+  overflow-y: auto;
 }
 
 /* ===== Config Panel ===== */
@@ -950,43 +1057,24 @@ a {
 
 /* ===== Responsive ===== */
 @media (max-width: 960px) {
-  .app-layout {
+  .writer-below-fold {
+    flex-direction: column;
     height: auto;
-    overflow: visible;
   }
 
-  .app-main {
-    min-height: 0;
-    overflow: visible;
-  }
-
-  .writer-page {
-    height: auto;
-    overflow: visible;
-  }
-
-  .writer-page-content {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto;
-    overflow: visible;
-  }
-
-  .writer-column {
-    width: 100%;
-    min-width: 0;
+  .writer-chat-col {
+    height: 60vh;
     border-right: none;
     border-bottom: 1px solid var(--border);
-    overflow-y: visible;
   }
 
-  .writer-column--config {
+  .writer-evolution-col {
+    width: 100%;
     max-height: 300px;
-    overflow-y: auto;
   }
 
-  .writer-column--evolution {
-    max-height: 300px;
-    overflow-y: auto;
+  .writer-rpg-strip--visible {
+    max-height: 80px; /* allow wrapping on small screens */
   }
 }
 

@@ -5,7 +5,7 @@ import * as api from '../api/client';
 import StudioTransition from '../components/StudioTransition';
 import BriefSetup from '../components/BriefSetup';
 import SessionExperience from '../components/SessionExperience';
-import './writing.css';
+import '../writing.css';
 
 type StudioStep = 'transition' | 'brief' | 'session';
 

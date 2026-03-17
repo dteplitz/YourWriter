@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ChatPanel from '../components/ChatPanel';
 import ConfigPanel from '../components/ConfigPanel';
 import EvolutionFeed from '../components/EvolutionFeed';
 import { useWriterStore } from '../stores/writerStore';
+import type { Identity } from '../types';
 import * as api from '../api/client';
 
 export default function WriterPage() {
@@ -11,6 +12,10 @@ export default function WriterPage() {
   const navigate = useNavigate();
   const { selectedWriter, selectWriter } = useWriterStore();
   const [loading, setLoading] = useState(true);
+  const [identity, setIdentity] = useState<Identity | null>(null);
+  const [heroVisible, setHeroVisible] = useState(true);
+  const heroRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!id) {
@@ -22,6 +27,21 @@ export default function WriterPage() {
       selectWriter(null);
     };
   }, [id]);
+
+  // Watch when the config hero scrolls out of view (scroll-event based, more predictable)
+  useEffect(() => {
+    const page = pageRef.current;
+    if (!page) return;
+    const check = () => {
+      const hero = heroRef.current;
+      if (!hero) return;
+      // heroBottom < 150: hero has scrolled above the visible content area (both headers ~118px)
+      setHeroVisible(hero.getBoundingClientRect().bottom > 150);
+    };
+    page.addEventListener('scroll', check, { passive: true });
+    check();
+    return () => page.removeEventListener('scroll', check);
+  }, [loading]);
 
   const loadWriter = async (writerId: string) => {
     setLoading(true);
@@ -39,23 +59,62 @@ export default function WriterPage() {
     return <div className="writer-page-loading">Loading writer...</div>;
   }
 
+  const showRpgStrip = !heroVisible && identity !== null;
+  const emotions = identity
+    ? Object.entries(identity.emotions)
+        .filter(([, v]) => typeof v === 'number')
+        .slice(0, 5)
+    : [];
+  const traits = identity ? Object.entries(identity.personality).slice(0, 3) : [];
+
   return (
-    <div className="writer-page">
-      <div className="writer-page-header">
-        <button className="btn btn-secondary" onClick={() => navigate('/')}>
-          Back
-        </button>
-        <h2>{selectedWriter.name}</h2>
-        <span className="writer-purpose">{selectedWriter.purpose}</span>
-      </div>
-      <div className="writer-page-content">
-        <div className="writer-column writer-column--config">
-          <ConfigPanel writerId={id} />
+    <div ref={pageRef} className="writer-page">
+      {/* Sticky header — always visible, gains RPG strip when hero scrolls out */}
+      <div className="writer-sticky-header">
+        <div className="writer-page-header">
+          <button className="btn btn-secondary" onClick={() => navigate('/')}>
+            Back
+          </button>
+          <div className="writer-page-header-info">
+            <h2>{selectedWriter.name}</h2>
+            <span className="writer-purpose">{selectedWriter.purpose}</span>
+          </div>
+          <div style={{ minWidth: '80px' }} />
         </div>
-        <div className="writer-column writer-column--chat">
+
+        {/* RPG stats strip — slides in when config hero is out of view */}
+        <div className={`writer-rpg-strip${showRpgStrip ? ' writer-rpg-strip--visible' : ''}`}>
+          {emotions.map(([key, value]) => {
+            const pct = Math.round(Math.min(1, value as number) * 100);
+            return (
+              <span key={key} className="rpg-emotion-mini">
+                <span className="rpg-emotion-mini-label">{key}</span>
+                <span className="rpg-emotion-mini-bar">
+                  <span className="rpg-emotion-mini-fill" style={{ width: `${pct}%` }} />
+                </span>
+                <span className="rpg-emotion-mini-val">{pct}%</span>
+              </span>
+            );
+          })}
+          {traits.map(([key, value]) => (
+            <span key={key} className="rpg-trait-chip">
+              {key}: {String(value)}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Hero: Artist Profile */}
+      <div ref={heroRef} className="writer-hero">
+        <ConfigPanel writerId={id} onIdentityLoaded={setIdentity} />
+      </div>
+
+      {/* Below the fold: Chat + Evolution */}
+      <div className="writer-below-fold">
+        <div className="writer-chat-col">
           <ChatPanel writerId={id} onEnterStudio={() => navigate('/studio/' + id)} />
         </div>
-        <div className="writer-column writer-column--evolution">
+        <div className="writer-evolution-col">
           <EvolutionFeed writerId={id} />
         </div>
       </div>

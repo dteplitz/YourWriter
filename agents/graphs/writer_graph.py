@@ -11,6 +11,7 @@ identity information, constraints, and intermediate writing artifacts.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
 from typing_extensions import TypedDict
@@ -67,7 +68,7 @@ async def detect_intent_node(state: WriterState) -> dict[str, Any]:
 
     mode: Literal["chat", "write"] = "chat"
     for signal in write_signals:
-        if signal in latest:
+        if re.search(r'\b' + re.escape(signal) + r'\b', latest):
             mode = "write"
             break
 

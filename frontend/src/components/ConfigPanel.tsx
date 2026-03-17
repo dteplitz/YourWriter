@@ -8,6 +8,7 @@ import '../config-panel.css';
 
 interface ConfigPanelProps {
   writerId: string;
+  onIdentityLoaded?: (identity: Identity) => void;
 }
 
 type KVPair = { key: string; value: string };
@@ -132,7 +133,7 @@ function KVTable({ pairs, onChange, addLabel }: KVTableProps) {
   );
 }
 
-export default function ConfigPanel({ writerId }: ConfigPanelProps) {
+export default function ConfigPanel({ writerId, onIdentityLoaded }: ConfigPanelProps) {
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -172,6 +173,7 @@ export default function ConfigPanel({ writerId }: ConfigPanelProps) {
     try {
       const data = await api.getIdentity(writerId);
       setIdentity(data);
+      onIdentityLoaded?.(data);
     } catch {
       setIdentity(null);
     } finally {
