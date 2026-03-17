@@ -30,7 +30,7 @@ No recordás nada de lo anterior sobre este proyecto. El contexto de quién es D
 **Leer al inicio de cada sesión (antes de proponer nada):**
 1. `PRODUCT.md` — qué está construido funcionalmente
 2. `ARCHITECTURE.md` — estructura técnica actual
-3. `SPRINT6.md` — plan del sprint activo *(actualizar esta línea cada sprint — hoy no existe todavía)*
+3. `SPRINT55.md` — plan del sprint activo *(actualizar esta línea cada sprint)*
 4. `LINEAGE.md` — razonamiento de diseño (siempre relevante)
 
 **Diagnóstico al despertar — después de leer, decirle a Damian:**
