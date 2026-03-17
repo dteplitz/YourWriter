@@ -271,6 +271,7 @@ async def stream_studio_session(
     if not os.getenv("ANTHROPIC_API_KEY"):
         raise RuntimeError("ANTHROPIC_API_KEY environment variable is not set")
 
+    from agents.nodes.research_node import research_node_stream  # noqa: E402
     from agents.nodes.writing_nodes import (  # noqa: E402
         outline_node,
         draft_node,
@@ -307,7 +308,13 @@ async def stream_studio_session(
         "constraints": identity_dict.get("constraints", {}),
     }
 
-    # TODO: research_node would go here (Sprint 6+) before outline
+    # Research phase: web search if the request needs current information
+    async for event in research_node_stream(state):
+        if "search_results" in event:
+            if event["search_results"]:
+                state["search_results"] = event["search_results"]
+        else:
+            yield event  # forward tool_use / tool_result to SSE stream
 
     # Outline
     yield {"phase": "outlining"}
