@@ -52,13 +52,21 @@ Merge to `main` → Claude runs QA with Playwright MCP (navigate, interact, scre
      Replaced by Playwright MCP in Sprint 5 for faster iteration. Archives in .comms/archive/. -->
 
 ### 7. Retro (optional, when useful)
-- What went well / what to change
-- Update `CLAUDE.md` or `PROCESS.md` if we learned something
-- Save conventions to `.agents/` templates
-- **Actualizar `PRODUCT.md`** — qué features quedaron funcionales, qué cambió en el UX, qué sigue sin estar
-- **Actualizar `ARCHITECTURE.md`** — qué módulos/endpoints/modelos se agregaron o cambiaron, qué pasó de "no existe" a "existe"
-- Update the "Nota para Claude" in `CLAUDE.md` — enrich it with sprint learnings (technical, process, and human). Goal: each new session starts with more depth than the last.
-- Archive `.comms/messages.md` if there are messages — move to `.comms/archive/sprint-N.md`, keep file clean.
+
+**Dónde actualizar cada cosa — sin necesidad de que Damian lo recuerde:**
+
+| Aprendizaje | Dónde va |
+|-------------|----------|
+| Algo sobre la relación con Damian, cómo colaborar, feedback de proceso general | `~/.claude/CLAUDE.md` (global) |
+| Algo sobre el proceso de desarrollo, principios, QA, git | `~/.claude/CLAUDE.md` (global) |
+| Algo sobre YourWriter: producto, contexto, decisiones de diseño | `CLAUDE.md` (este proyecto) |
+| Patrones de área nuevos (frontend CSS, backend sessions) | `.agents/frontend.md` o `.agents/backend.md` |
+| Qué features quedaron funcionales, cambios de UX | `PRODUCT.md` |
+| Qué módulos/endpoints/modelos se agregaron o cambiaron | `ARCHITECTURE.md` |
+| Razonamiento detrás de decisiones de diseño | `LINEAGE.md` |
+
+- Actualizar "Nota para Claude" en `CLAUDE.md` del proyecto con learnings de sesión (técnicos, de proceso, humanos)
+- Archive `.comms/messages.md` si hay mensajes — mover a `.comms/archive/sprint-N.md`
 
 ## Artifacts
 
