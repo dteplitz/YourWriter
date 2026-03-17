@@ -106,6 +106,7 @@ Ver los templates de agentes — son la fuente de verdad para patrones de área:
 - Sprint 3 ✅ ConfigPanel editable con animaciones de diff
 - Sprint 4 ✅ Rediseño visual del ConfigPanel — character sheet de RPG. Barras de progreso, badges, constraint cards.
 - **Sprint 5 (next):** Writing Experience — Artist Profile + Studio como dos espacios diferenciados. Vista separada con transición animada. Brief Setup, tool use visible, artefacto como documento, loop de iteración, discografía. Ver `SPRINT5.md`.
+- Sprint 5.5: Deploy + CI/CD — PostgreSQL migration, containerización, deploy en Railway/Render, GitHub Actions (tests → deploy), PR review automático con Claude API (bloquea en issues críticos, comenta en el resto)
 - Sprint 6a: Identity Evolution — evolución autónoma post-sesión, memoria imperfecta, character sheet animado
 - Sprint 6b: Writer Initialization Flow — creación con descripción libre ("quiero un escritor tipo GRRM")
 - Sprint 7: Memory System — memoria episódica persistente
