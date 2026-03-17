@@ -53,6 +53,9 @@ from backend.api.deps import get_current_user
 - Después de cualquier cambio, verificar con `curl` antes de decirle a Damian que pruebe en UI
 - Nunca asumir que `--reload` levantó los cambios — verificar con una llamada a la API
 
+## Worktree Permissions — CRÍTICO
+Si estás corriendo en un worktree (git worktree), el `.claude/settings.json` no se hereda automáticamente. Sin ese archivo, no podés ejecutar comandos Bash (git, python, npm). Si no podés correr comandos, crea `.claude/settings.json` en la raíz del worktree con el contenido de `.claude/settings.json` del repo principal.
+
 ## Git / Process
 - Trabajar en feature branch, nunca commitear directo a `main`
 - Branch naming: `feature/<area>-<description>`

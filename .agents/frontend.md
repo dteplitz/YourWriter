@@ -37,11 +37,20 @@ React 19, Vite, TypeScript, Zustand, react-router-dom. No animation libraries �
 - Los fixtures de tests deben usar los mismos tipos que el dominio real
 - Functional components, typed props siempre
 
+## CSS Import Paths — CRÍTICO
+Los CSS imports son **siempre relativos a `src/`**, no al directorio del componente:
+- Desde `src/pages/`: `import '../writing.css'`
+- Desde `src/components/`: `import '../session.css'`
+- NUNCA `import './session.css'` desde un componente — no existe esa ruta
+
 ## Component Conventions
-- CSS de componentes de área en archivos separados (`config-panel.css`, no inline en index.css)
+- CSS de componentes de área en archivos separados (`config-panel.css`, `writing.css`, `session.css`)
 - Animaciones: CSS keyframes + React state (no framer-motion)
 - Estado global: Zustand stores en `frontend/src/stores/`
 - No crear nuevas funciones fetch — usar `frontend/src/api/client.ts`
+
+## Worktree Permissions — CRÍTICO
+Si estás corriendo en un worktree (git worktree), el `.claude/settings.json` no se hereda automáticamente. Sin ese archivo, no podés ejecutar comandos Bash (git, npm). Si no podés correr comandos, crea `.claude/settings.json` en la raíz del worktree con el contenido de `.claude/settings.json` del repo principal.
 
 ## Git / Process
 - Trabajar en feature branch, nunca commitear directo a `main`

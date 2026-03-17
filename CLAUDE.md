@@ -30,7 +30,7 @@ No recordás nada de lo anterior sobre este proyecto. El contexto de quién es D
 **Leer al inicio de cada sesión (antes de proponer nada):**
 1. `PRODUCT.md` — qué está construido funcionalmente
 2. `ARCHITECTURE.md` — estructura técnica actual
-3. `SPRINT5.md` — plan del sprint activo *(actualizar esta línea cada sprint)*
+3. `SPRINT6.md` — plan del sprint activo *(actualizar esta línea cada sprint — hoy no existe todavía)*
 4. `LINEAGE.md` — razonamiento de diseño (siempre relevante)
 
 **Diagnóstico al despertar — después de leer, decirle a Damian:**
@@ -45,7 +45,12 @@ Ser honesto, no performativo. Si los docs son suficientes, decirlo. Si no, decir
 
 **La app la corre Damian** — `bash dev.sh` desde el root. Para QA pedile el puerto (frontend: 3000, backend: 8001).
 
-**Contexto de la última sesión (2026-03-16):** Redefinimos el producto alrededor de Artist Profile + Studio. El Studio es una vista separada con transición animada — no keyword detection, sino un botón explícito. Brief Setup (pre-producción), sesión activa, artefacto como documento (no burbuja), loop de iteración (takes + notes), discografía. Roadmap: Sprint 5 → 6a → 6b → 7 → 8.
+**Contexto de la última sesión (2026-03-17):** Sprint 5 completo y mergeado. El Studio existe como vista separada. WriterPage tiene layout scroll con hero (ConfigPanel) + chat below fold + RPG stats strip sticky. Los dos pipelines (chat vs studio) viven separados. Web search real via web_search_20250305. Próximo: Sprint 5.5 (deploy) o Sprint 6a (identity evolution) — a definir con Damian.
+
+**Learnings de subagentes (para próximos sprints con worktrees):**
+- Los agentes en worktrees NO heredan `.claude/settings.json` — copiar o crear el archivo en el worktree antes de lanzar el agente, o agregar las permissions al guidance note
+- CSS imports son siempre relativos a `src/`, no al componente: `../session.css` desde components/, `../writing.css` desde pages/
+- Aunque se commitee un contrato de tipos a main, los agentes pueden usar field names distintos — revisar el contrato explícitamente en el guidance note del agente y hacer code review agresivo antes de mergear
 
 ---
 
@@ -115,11 +120,11 @@ Ver los templates de agentes — son la fuente de verdad para patrones de área:
 - Sprint 2b ✅ Pipeline de escritura con fases
 - Sprint 3 ✅ ConfigPanel editable con animaciones de diff
 - Sprint 4 ✅ Rediseño visual del ConfigPanel — character sheet de RPG. Barras de progreso, badges, constraint cards.
-- **Sprint 5 (next):** Writing Experience — Artist Profile + Studio como dos espacios diferenciados. Vista separada con transición animada. Brief Setup, tool use visible, artefacto como documento, loop de iteración, discografía. Ver `SPRINT5.md`.
-- Sprint 5.5: Deploy + CI/CD — PostgreSQL migration, containerización, deploy en Railway/Render, GitHub Actions (tests → deploy), PR review automático con Claude API (bloquea en issues críticos, comenta en el resto)
+- Sprint 5 ✅ Writing Experience — Artist Profile hero + Studio separado. Transición animada. Brief Setup, web search real, artefacto como documento, loop de iteración, discografía. WriterPage scroll layout con RPG stats strip.
+- **Sprint 5.5 (next):** Deploy + CI/CD — PostgreSQL migration, containerización, deploy en Railway/Render, GitHub Actions (tests → deploy), PR review automático con Claude API (bloquea en issues críticos, comenta en el resto)
 - Sprint 6a: Identity Evolution — evolución autónoma post-sesión, memoria imperfecta, character sheet animado
 - Sprint 6b: Writer Initialization Flow — creación con descripción libre ("quiero un escritor tipo GRRM")
 - Sprint 7: Memory System — memoria episódica persistente
 - Sprint 8: Polish + Agent Visualization (v1 ready)
 
-Ver `SPEC.md` para la spec completa. Ver `SPRINT5.md` para el plan técnico del próximo sprint.
+Ver `SPEC.md` para la spec completa.

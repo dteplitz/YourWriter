@@ -1,7 +1,7 @@
 # YourWriter — Estado Funcional del Producto
 
 *Documento vivo. Se actualiza al final de cada sprint con lo que quedó funcional.*
-*Última actualización: Sprint 4 ✅ — 2026-03-16*
+*Última actualización: Sprint 5 ✅ — 2026-03-17*
 
 ---
 
@@ -9,13 +9,13 @@
 
 YourWriter es una plataforma donde los usuarios crean escritores IA con personalidad, emociones y objetivos propios. Cada escritor tiene una identidad configurable que moldea cómo escribe. La visión a largo plazo es que esa identidad evolucione sola después de cada sesión de escritura.
 
-El producto tiene dos espacios conceptuales (en construcción desde Sprint 5):
-- **Artist Profile** — configurar y gestionar al escritor
-- **Studio** — la sesión de escritura activa
+El producto tiene dos espacios conceptuales (ambos construidos desde Sprint 5):
+- **Artist Profile** — configurar y gestionar al escritor (WriterPage)
+- **Studio** — la sesión de escritura activa (StudioPage)
 
 ---
 
-## Lo que existe hoy (post-Sprint 4)
+## Lo que existe hoy (post-Sprint 5)
 
 ### Autenticación
 
@@ -27,30 +27,52 @@ Al ingresar, el usuario ve todos sus writers. Puede crear un writer nuevo (nombr
 
 La creación genera una identidad inicial con valores por defecto. No hay todavía un flujo guiado de inicialización ("quiero un escritor tipo GRRM").
 
-### Writer Page — la pantalla principal
+### Writer Page — Artist Profile
 
-Al seleccionar un writer se abre una pantalla de tres columnas:
+Al seleccionar un writer se abre la página del escritor con **layout vertical scrollable**:
 
-**Columna izquierda — Artist Profile (ConfigPanel)**
-Muestra la identidad completa del writer como un character sheet de RPG:
-- **Personality traits**: presentados como barras de progreso animadas (valores 0–1)
-- **Emotions**: igual que personality, con barras animadas y colores diferenciados
-- **Traits/Topics/Lifelong objectives**: badges visuales
-- **Constraints**: tarjetas individuales — reglas en lenguaje natural parseadas a config estructurada
+**Zona hero (visible al cargar) — Artist Profile (ConfigPanel)**
+Muestra la identidad completa del writer como un character sheet de RPG a ancho completo:
+- **Personality traits**: badges con colores por tier (low/medium/high/max)
+- **Emotions**: barras de progreso animadas (valores 0–1)
+- **Topics/Lifelong objectives**: badges
+- **Constraints**: tarjetas individuales
 
-Todo es editable inline. Al guardar, los campos que cambiaron muestran una animación de diff (el valor anterior desaparece, el nuevo aparece). Los cambios persisten en base de datos versionados (cada edición crea una nueva versión de la identidad).
+Todo es editable inline con animaciones de diff al guardar. Los cambios persisten versionados (cada edición crea una nueva versión).
 
-**Columna central — ChatPanel**
-Interfaz conversacional con el writer seleccionado. Los mensajes se envían por SSE streaming. El writer detecta la intención automáticamente:
-- Si el mensaje tiene palabras clave de escritura (write, draft, compose, story, etc.) → activa el pipeline de escritura
-- Si no → responde conversacionalmente
+**RPG Stats Strip (sticky)**
+Al scrollear hacia abajo, el header sticky gana una fila compacta con mini emotion bars y trait chips — permite ver el estado del writer mientras se usa el chat.
 
-Cuando activa el pipeline, el chat muestra las fases en tiempo real: "outlining", "drafting", "refining". El output final aparece como una burbuja de chat más (esto cambia en Sprint 5).
+**Zona bajo el fold — Chat + Evolution Timeline**
+- **ChatPanel**: conversación libre con el writer. Keyword detection determina si responde como chat o activa el pipeline de escritura. El botón **"Studio →"** lleva al Studio.
+- **EvolutionFeed**: log de cambios de identidad (por ahora, solo cambios manuales).
 
-El historial de conversación persiste por writer.
+### Studio — sesión de escritura activa
 
-**Columna derecha — EvolutionFeed**
-Muestra el log de evolución del writer. Actualmente funciona como historial de cambios manuales (cuando el usuario edita la identidad). La evolución autónoma post-escritura no está implementada todavía.
+Se accede vía botón "Studio →" desde el ChatPanel. El Studio es una vista completamente separada con su propia ruta (`/studio/:writerId`).
+
+**Flujo dentro del Studio:**
+
+1. **Transición animada** — fade-in que muestra el nombre del writer, sus emociones actuales, constraints y la última pieza escrita. Botón "Entrar" para continuar.
+
+2. **Brief Setup** — el usuario describe en lenguaje libre qué quiere escribir. El sistema genera un brief estructurado (formato, tono, constraints aplicados, word limit). Si el brief necesita aclaración, el sistema pregunta antes de continuar.
+
+3. **Sesión activa** — pipeline de escritura con fases visibles en tiempo real:
+   - **Preparando** → pill "Armando estructura..."
+   - **Tool use (web search)** → pill "Buscando: [query]"
+   - **Drafting** → pill "Primer take..."
+   - **Refining** → pill "Mezclando..."
+   - Texto streameado en tiempo real durante las fases
+
+4. **Artefacto** — la pieza terminada aparece como un documento (no como burbuja de chat): título generado por el modelo, badge de formato, botón de copiar, botones "Iterar" y "Finalizar sesión".
+
+5. **Loop de iteración** — notas del productor → nuevo take. El textarea de notas permite pedir cambios específicos y relanzar el pipeline sin salir del Studio.
+
+6. **Discografía** — las piezas se acumulan como historial del writer. Expandibles, con fecha relativa en español.
+
+### Web Search real
+
+El Studio usa `web_search_20250305` (herramienta built-in de Anthropic SDK ≥0.49.0). La búsqueda se realiza durante la fase de research antes del outline. Las queries y resultados son visibles en tiempo real via el tool use pill.
 
 ---
 
@@ -58,17 +80,13 @@ Muestra el log de evolución del writer. Actualmente funciona como historial de 
 
 | Feature | Sprint |
 |---------|--------|
-| Studio como vista separada | Sprint 5 |
-| Transición animada al Studio | Sprint 5 |
-| Brief Setup (pre-producción) | Sprint 5 |
-| Tool use visible (web search pill) | Sprint 5 |
-| Artefacto de escritura como documento | Sprint 5 |
-| Loop de iteración (takes + notes) | Sprint 5 |
-| Discografía (biblioteca de piezas) | Sprint 5 |
-| Web search real (hoy es un stub) | Sprint 5 |
-| Evolución autónoma post-sesión | Sprint 6 |
-| Writer initialization flow (GRRM-style) | Sprint 6 |
-| Animación del character sheet al evolucionar | Sprint 6 |
+| Evolución autónoma post-sesión | Sprint 6a |
+| Writer initialization flow (GRRM-style) | Sprint 6b |
+| Animación del character sheet al evolucionar | Sprint 6a |
+| Deploy (PostgreSQL, Railway/Render, CI/CD) | Sprint 5.5 |
+| PR review automático con Claude API | Sprint 5.5 |
+| Memory System (memoria episódica persistente) | Sprint 7 |
+| Polish + Agent Visualization | Sprint 8 |
 
 ---
 
@@ -80,20 +98,20 @@ Muestra el log de evolución del writer. Actualmente funciona como historial de 
 3. Dashboard → lista de writers del usuario
 4. Click "New Writer" → modal: nombre, purpose, estilo
 5. Writer creado → aparece en el dashboard
-6. Click en el writer → Writer Page (3 columnas)
-7. Columna izquierda: ver y editar la identidad del writer (character sheet)
-8. Columna central: chatear con el writer
+6. Click en el writer → Writer Page
+7. Zona hero: ver y editar la identidad del writer (character sheet RPG)
+8. Scrollear → ChatPanel + EvolutionFeed
    - Chat libre → respuesta conversacional
-   - Pedir escritura → phases (outlining/drafting/refining) → texto en el chat
-9. Columna derecha: ver el log de cambios de la identidad
-10. Volver al dashboard → botón "Back"
+   - Pedir escritura por keywords → pipeline con fases
+9. Click "Studio →" → transición animada al Studio
+10. Studio: Brief Setup → sesión activa (fases + tool use) → artefacto
+11. Artefacto: copiar / iterar con notas / finalizar sesión
+12. Discografía: ver todas las piezas del writer
 ```
 
 ---
 
 ## Notas de UX conocidas
 
-- El output de escritura aparece como burbuja de chat — no se diferencia del output conversacional. Esto es el problema central que resuelve Sprint 5.
-- No hay feedback claro de cuándo el pipeline terminó vs. cuándo está pensando.
-- La detección de intento de escritura es por keywords — puede tener falsos positivos/negativos. Se elimina en Sprint 5 reemplazándola por un botón explícito.
-- El ConfigPanel es funcional y visualmente sólido pero vive en la misma pantalla que el chat, sin jerarquía clara de "gestión vs. escritura activa".
+- La keyword detection en el chat aún puede tener falsos positivos/negativos (mejorada con word boundary regex, pero no es perfecta). El camino largo es eliminarla — el Studio es el lugar correcto para escritura, el chat es para conversar.
+- El output de escritura en el CHAT todavía aparece como burbuja (solo en el chat, no en el Studio). Se puede limpiar en una iteración futura.

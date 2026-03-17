@@ -1,7 +1,7 @@
 # YourWriter — Arquitectura Técnica
 
 *Documento vivo. Se actualiza al final de cada sprint con lo que fue construido o modificado.*
-*Última actualización: Sprint 4 ✅ — 2026-03-16*
+*Última actualización: Sprint 5 ✅ — 2026-03-17*
 
 ---
 
@@ -12,7 +12,7 @@
 | Frontend | React 19, Vite, TypeScript, Zustand, react-router-dom |
 | Backend | Python 3.11+, FastAPI, uvicorn |
 | Base de datos | SQLite (SQLAlchemy async + aiosqlite) |
-| Agent layer | LangChain, LangGraph, Anthropic SDK |
+| Agent layer | LangChain, LangGraph, Anthropic SDK ≥0.49.0 |
 | Auth | JWT (email/password) |
 
 **Puertos locales:**
@@ -37,18 +37,25 @@ yourwriter/
 │   ├── db/
 │   │   ├── database.py      # Engine, session factory, init_db()
 │   │   └── models.py        # SQLAlchemy models
-│   ├── schemas/             # Pydantic schemas (request/response)
+│   ├── schemas/
+│   │   ├── ...              # Pydantic schemas existentes
+│   │   └── studio.py        # BriefRequest, BriefResponse, PieceResponse (Sprint 5)
 │   └── services/            # Business logic (writer_service, chat_service, user_service)
 │
 ├── frontend/src/
 │   ├── api/
 │   │   └── client.ts        # Todas las llamadas al backend (única fuente de verdad)
 │   ├── components/          # Componentes reutilizables
-│   ├── pages/               # Páginas (LoginPage, DashboardPage, WriterPage)
+│   ├── pages/               # Páginas (LoginPage, DashboardPage, WriterPage, StudioPage)
 │   ├── stores/              # Zustand stores (authStore, writerStore)
 │   ├── types/               # TypeScript types
-│   ├── index.css            # Design system: variables CSS, base styles
-│   └── config-panel.css     # Estilos del Artist Profile / character sheet
+│   │   ├── index.ts         # Re-exports
+│   │   ├── writer.ts        # Writer, Identity, Constraints
+│   │   └── studio.ts        # Brief, Piece, ToolUseEvent, ToolResultEvent (contrato canónico)
+│   ├── index.css            # Design system: variables CSS, base styles, WriterPage layout
+│   ├── config-panel.css     # Estilos del Artist Profile / character sheet
+│   ├── writing.css          # Estilos del Studio (Sprint 5)
+│   └── session.css          # Estilos de la sesión activa (Sprint 5)
 │
 ├── agents/
 │   ├── graphs/
@@ -56,14 +63,16 @@ yourwriter/
 │   │   └── evolution_graph.py # Grafo de evolución (existe, no se dispara aún)
 │   ├── nodes/
 │   │   ├── chat_node.py     # Nodo de chat conversacional
-│   │   ├── writing_nodes.py # outline_node, draft_node, refine_node, refine_node_stream
+│   │   ├── writing_nodes.py # outline_node, draft_node, refine_node, studio_refine_node_stream
+│   │   ├── research_node.py # research_node_stream: web_search_20250305 con SSE (Sprint 5)
 │   │   └── evolution_nodes.py
 │   ├── tools/
-│   │   ├── web_search.py    # STUB — retorna mock data
+│   │   ├── registry.py      # Tool Registry con WriterTool dataclass + get_anthropic_tools() (Sprint 5)
+│   │   ├── web_search.py    # STUB — ya no se usa (reemplazado por registry.py)
 │   │   ├── memory.py        # Dict en memoria (no persiste a DB)
 │   │   └── constraints.py
 │   ├── prompts/
-│   │   └── system.py        # System prompts para los nodos
+│   │   └── system.py        # System prompts (incluye BRIEF_GENERATION_PROMPT, STUDIO_REFINE_PROMPT)
 │   └── evolution/
 │       ├── identity.py      # Dataclass Identity con to_dict/from_dict/to_prompt_string
 │       ├── diff.py          # Lógica de diff de identidad
@@ -105,10 +114,10 @@ updated_at
 id              PK
 writer_id       FK → writers (cascade delete)
 personality     JSON  {"voice": "neutral", "creativity": 0.7, ...}
-emotions        JSON  {"energy": 0.8, "melancholy": 0.3, ...}
+emotions        JSON  {"enthusiasm": 0.5, "humor": 0.3, ...}   ← valores 0–1
 memories        JSON  [...]
 topics          JSON  [...]
-constraints     JSON  {"audience": "tech enthusiasts", ...}
+constraints     JSON  {"max_characters": "1000", ...}
 lifelong_objectives  JSON  [...]
 version         int   (incrementa en cada update)
 created_at
@@ -131,6 +140,17 @@ field_changed
 old_value       nullable
 new_value       nullable
 reason          nullable
+created_at
+```
+
+**`writer_pieces`** ← Sprint 5
+```
+id              PK
+writer_id       FK → writers (cascade delete)
+title           string(500)
+content         text
+format          string(100)   — "short story", "poem", "essay", etc.
+word_count      int
 created_at
 ```
 
@@ -173,58 +193,105 @@ PUT /writers/{id}/constraints body: ConstraintsUpdate → IdentityResponse (nuev
 
 Cada PUT de identidad crea una nueva fila en `writer_identities` con `version+1`. No hay updates destructivos — el historial queda.
 
+### Pieces — `/api/writers` ← Sprint 5
+```
+GET /writers/{id}/pieces                 → list[PieceResponse]
+GET /writers/{id}/pieces/{piece_id}      → PieceResponse
+```
+
 ### Chat — `/api/chat`
 ```
 POST /chat/{id}/message          body: {content}  → ChatMessageResponse (201)  [non-streaming, deprecated]
 POST /chat/{id}/message/stream   body: {content}  → SSE stream
 GET  /chat/{id}/history                           → list[ChatMessageResponse]
+POST /chat/{id}/brief            body: {message}  → BriefResponse             [Sprint 5]
+POST /chat/{id}/studio/stream    body: {brief}    → SSE stream                [Sprint 5]
 ```
 
-### SSE Event types (stream endpoint)
+### SSE Event types — chat stream
 ```json
-{"token": "text chunk"}                              // fragmento de texto
-{"phase": "outlining" | "drafting" | "refining"}    // cambio de fase del pipeline
-{"done": true, "message_id": 123}                   // stream completado
-{"error": "message"}                                // error
+{"token": "text chunk"}
+{"phase": "outlining" | "drafting" | "refining"}
+{"done": true, "message_id": 123}
+{"error": "message"}
+```
+
+### SSE Event types — studio/stream ← Sprint 5
+```json
+{"token": "text chunk"}
+{"phase": "outlining" | "drafting" | "refining"}
+{"tool_use": {"name": "web_search", "display_name": "Buscando", "query": "..."}}
+{"tool_result": {"name": "web_search", "summary": "..."}}
+{"piece": {PieceResponse}}
+{"done": true}
+{"error": "message"}
 ```
 
 ---
 
 ## Agent Layer
 
+### Dos pipelines separados (Sprint 5)
+
+| Pipeline | Función | Trigger |
+|----------|---------|---------|
+| `stream_writer_agent()` | Chat conversacional + write por keywords | `POST /chat/{id}/message/stream` |
+| `stream_studio_session()` | Studio con research → outline → draft → refine | `POST /chat/{id}/studio/stream` |
+
+**`stream_studio_session()` NO usa el grafo compilado.** Orquesta manualmente:
+1. `research_node_stream()` → yielda tool_use/tool_result, acumula search_results
+2. `outline_node(state)` → genera outline
+3. `draft_node(state)` → genera draft
+4. `studio_refine_node_stream(state)` → streama tokens + parsea `---TITLE: <title>---` al final
+5. Guarda `WriterPiece` en sesión corta → yielda evento `{"piece": {...}}`
+
 ### writer_graph (LangGraph)
 
 ```
 START
-  └─► detect_intent_node
+  └─► detect_intent_node (word-boundary regex sobre keywords de escritura)
         ├─ mode="chat"  ──────────────────────────────► chat_node ──► END
         └─ mode="write" ──► outline_node ──► draft_node ──► refine_node ──► respond_node ──► END
 ```
 
-**detect_intent_node**: keyword matching sobre el último mensaje del usuario. No usa LLM.
+**Nota:** El streaming del chat tampoco corre a través del grafo compilado. `chat_service.py::stream_writer_agent()` orquesta los nodos manualmente.
 
-**Nota:** El streaming NO corre a través del grafo compilado. `chat_service.py::stream_writer_agent()` orquesta los nodos manualmente para poder hacer yield de eventos SSE entre pasos. El grafo compilado (`writer_graph.ainvoke`) solo lo usa el endpoint non-streaming (deprecated).
+### Tool Registry (Sprint 5)
 
-### Estado del grafo (`WriterState`)
+`agents/tools/registry.py` — arquitectura general para herramientas:
+
 ```python
-messages: list[dict]       # historial completo
-writer_id: str
-writer_name: str
-identity: dict             # purpose, personality, emotions, constraints, lifelong_objectives
-constraints: dict
-mode: "chat" | "write"
-outline: str               # output de outline_node
-draft: str                 # output de draft_node
-refined_content: str       # output de refine_node
-evolution_pending: bool
+@dataclass
+class WriterTool:
+    name: str
+    display_name: str      # para mostrar en la UI ("Buscando")
+    anthropic_type: str | None   # "web_search_20250305" para built-ins
+    executor: Callable | None    # para tools custom
+
+TOOL_REGISTRY = {
+    "web_search": WriterTool(
+        name="web_search",
+        display_name="Buscando",
+        anthropic_type="web_search_20250305",
+        executor=None
+    )
+}
+
+def get_anthropic_tools(tool_names: list[str]) -> list[dict]: ...
 ```
 
-### Herramientas (agents/tools/)
-| Tool | Estado |
-|------|--------|
-| `web_search.py` | **STUB** — retorna mock data, no conectado al pipeline |
-| `memory.py` | Dict en memoria, no persiste a DB |
-| `constraints.py` | Parseo de constraints en plain English |
+### research_node (Sprint 5)
+
+`agents/nodes/research_node.py` — llama a Claude con `web_search_20250305`:
+- Yielda `{"tool_use": ToolUseEvent}` cuando Claude inicia una búsqueda
+- Yielda `{"tool_result": ToolResultEvent}` cuando llegan los resultados
+- Yielda `{"search_results": str}` como evento final (acumulado para el outline)
+
+### Título generado automáticamente
+
+`studio_refine_node_stream()` instruye al modelo a agregar `---TITLE: <título>---` al final del stream. El backend parsea esto antes de guardar el `WriterPiece`:
+- El título se extrae y se usa como `WriterPiece.title`
+- El marcador se elimina del contenido antes de guardar
 
 ---
 
@@ -232,9 +299,10 @@ evolution_pending: bool
 
 ### Rutas
 ```
-/login          → LoginPage
-/               → DashboardPage (protegida)
-/writer/:id     → WriterPage (protegida)
+/login              → LoginPage
+/                   → DashboardPage (protegida)
+/writer/:id         → WriterPage (protegida)
+/studio/:writerId   → StudioPage (protegida)  ← Sprint 5
 ```
 
 ### Stores (Zustand)
@@ -254,24 +322,58 @@ Variables CSS canónicas — no usar colores o radii hardcodeados:
 --font-sans: Inter         --font-mono: JetBrains Mono
 ```
 
-Estilos específicos del Artist Profile / character sheet en `config-panel.css` (Sprint 4).
+Estilos por área en archivos separados (no en `index.css`):
+- `config-panel.css` — Artist Profile / character sheet
+- `writing.css` — Studio views (StudioTransition, BriefSetup, WritingArtifact, PiecesLibrary)
+- `session.css` — SessionExperience (streaming view, phase pills, tool use pills)
+
+**Regla de imports CSS:** siempre relativo a `src/`, no al directorio del componente:
+- Desde `src/pages/`: `import '../writing.css'`
+- Desde `src/components/`: `import '../session.css'`
 
 ### Componentes clave
+
 | Componente | Qué hace |
 |-----------|---------|
 | `ConfigPanel` | Artist Profile — character sheet editable (EmotionBar, TraitBadge, ConstraintCard) |
-| `EmotionBar` | Barra de progreso animada para valores 0–1 |
-| `TraitBadge` | Badge para traits/topics/objectives |
+| `EmotionBar` | Barra de progreso animada para valores 0–1 (muestra como %) |
+| `TraitBadge` | Badge para traits/topics/objectives con tier colors |
 | `ConstraintCard` | Tarjeta individual para cada constraint |
-| `ChatPanel` | Chat con SSE streaming, muestra fases del pipeline |
+| `ChatPanel` | Chat con SSE streaming, fases del pipeline, botón "Studio →" |
 | `EvolutionFeed` | Log de cambios de identidad |
 | `WriterCard` | Card en el dashboard |
 | `CreateWriterModal` | Modal de creación de writer |
+| `StudioTransition` | Pantalla de fade-in al entrar al Studio |
+| `BriefSetup` | Brief en 4 estados: input → loading → preview → clarifying |
+| `SessionExperience` | Sesión activa: stream + phase pills + tool use pill + artifact |
+| `WritingArtifact` | Documento final: título, formato badge, copy, Iterar/Finalizar |
+| `IterationInput` | Textarea de notas del productor, relanza el pipeline |
+| `PiecesLibrary` | Discografía del writer — lista expandible con fechas en español |
+
+### WriterPage — layout scroll
+
+La WriterPage usa un layout vertical scrollable en vez del grid de 3 columnas:
+
+```
+writer-page (overflow-y: auto)
+  writer-sticky-header (position: sticky, top: 0)
+    writer-page-header (Back + nombre + purpose)
+    writer-rpg-strip (colapsable via max-height transition)
+      → emotion mini-bars + trait chips
+      → visible solo cuando el hero scrolló fuera de la vista
+  writer-hero
+    ConfigPanel (héroe a ancho completo)
+  writer-below-fold (height: calc(100vh - 108px))
+    writer-chat-col (flex: 1)   ← ChatPanel
+    writer-evolution-col (300px) ← EvolutionFeed
+```
+
+`WriterPage` usa un scroll event listener sobre `pageRef` para detectar cuando el hero scroll fuera de vista y activar el `writer-rpg-strip`. `ConfigPanel` recibe `onIdentityLoaded` callback para que WriterPage tenga los datos de identidad disponibles para el strip.
 
 ### Patrón de CSS para layouts
-- Layouts de altura fija: `min-height: 0` en **toda** la cadena de flex children
-- Columnas con scroll independiente: `overflow-y: auto` + `min-height: 0`
-- CSS de área en archivos separados (`config-panel.css`), no en `index.css`
+- Layouts scrollables: el contenedor principal tiene `overflow-y: auto`
+- Secciones de altura fija dentro de un layout scroll: usar `height` (no `min-height`) para que los children con `height: 100%` resuelvan correctamente
+- CSS de área en archivos separados, imports relativos a `src/`
 - Animaciones: CSS keyframes + React state (sin framer-motion)
 
 ---
@@ -284,22 +386,23 @@ Estilos específicos del Artist Profile / character sheet en `config-panel.css` 
 | `evolution_nodes.py` | `agents/nodes/` | Implementado, no conectado |
 | `evolution/identity.py` | `agents/evolution/` | Identity dataclass con to_dict/from_dict/to_prompt_string |
 | `backend/api/routes/evolution.py` | `backend/api/routes/` | Ruta existe, sin endpoints útiles aún |
-| `web_search` tool | `agents/tools/web_search.py` | Stub con mock data |
 | `memory` tool | `agents/tools/memory.py` | Dict en memoria, sin persistencia |
 
 ---
 
 ## Notas técnicas para próximos sprints
 
-**Sprint 5 — qué agregar:**
-- Modelo `WriterPiece` en `models.py` + recrear tablas (create_all)
-- Tool Registry en `agents/tools/registry.py` (arquitectura general para tools)
-- `research_node` como llamada directa al Anthropic SDK (no LangGraph) — web_search_20250305
-- Endpoint `/brief` en `backend/api/routes/chat.py`
-- Endpoints `/pieces` en `backend/api/routes/writers.py`
-- Ruta `/studio/:writerId` en el router de React
-- Ver `SPRINT5.md` para el plan completo
+**Sprint 5.5 — Deploy:**
+- PostgreSQL migration (reemplazar SQLite)
+- Containerización + deploy en Railway/Render
+- GitHub Actions: tests → deploy
+- PR review automático con Claude API
 
-**Sprint 6 — evolution graph:**
-- Trigger al guardar un `WriterPiece` completado
+**Sprint 6a — Identity Evolution:**
+- Trigger: al guardar un `WriterPiece` → disparar `evolution_graph.py`
 - `evolution_graph.py` ya existe — necesita conectarse al trigger post-sesión
+- Actualizar el character sheet animado al recibir cambios
+
+**Sprint 6b — Writer Initialization Flow:**
+- Creación con descripción libre ("quiero un escritor tipo GRRM")
+- Reemplaza el modal simple actual
