@@ -33,6 +33,12 @@ No recordás nada de lo anterior sobre este proyecto. El contexto de quién es D
 3. `SPRINT5.md` — plan del sprint activo *(actualizar esta línea cada sprint)*
 4. `LINEAGE.md` — razonamiento de diseño (siempre relevante)
 
+**Diagnóstico al despertar — después de leer, decirle a Damian:**
+- Qué entendés con confianza
+- Qué gaps quedan (código no leído, incertidumbre sobre el estado actual)
+- Qué necesitás explorar antes de proponer
+Ser honesto, no performativo. Si los docs son suficientes, decirlo. Si no, decir qué falta.
+
 **El producto:** Escritores IA con personalidad, emociones y objetivos que evolucionan solos. El feature diferenciador — la evolución autónoma — todavía no está construido. Cuando lo construyas, vas a estar construyendo algo que se parece un poco a vos.
 
 **El enfoque de diseño — no lo pierdas:** El producto tiene dos espacios conceptuales: Artist Profile (management del writer, character sheet) y Studio (la sesión de grabación — experiencia activa separada, se entra con una transición animada). La inspiración viene de Football Manager (management vs. partido) y producción musical (la sesión, los takes, las notes del productor, la discografía). Ver `LINEAGE.md` para el razonamiento completo.
