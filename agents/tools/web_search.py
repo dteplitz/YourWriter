@@ -1,64 +1,27 @@
-"""Web search tool for writer agents.
+"""Web search tool — thin wrapper over the tool registry.
 
-This is a placeholder implementation that returns mock results.  It will be
-replaced with a real web search integration (e.g., Tavily, SerpAPI, or an
-MCP-based search tool) in a future iteration.
+The actual search execution is handled by Anthropic's built-in
+``web_search_20250305`` tool.  The ``research_node`` is responsible
+for calling the Anthropic API with this tool and processing the
+response.
+
+Legacy ``web_search()`` function and ``WEB_SEARCH_TOOL_DEFINITION``
+are kept for backward compatibility with any code that still imports
+them, but new code should use the registry directly.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from agents.tools.registry import TOOL_REGISTRY, WriterTool, get_anthropic_tools
 
+# Re-export registry helpers so callers can do:
+#   from agents.tools.web_search import get_anthropic_tools
+__all__ = [
+    "TOOL_REGISTRY",
+    "WriterTool",
+    "get_anthropic_tools",
+    "WEB_SEARCH_TOOL",
+]
 
-def web_search(query: str, num_results: int = 5) -> list[dict[str, str]]:
-    """Search the web for information related to a query.
-
-    Parameters
-    ----------
-    query:
-        The search query string.
-    num_results:
-        Maximum number of results to return.
-
-    Returns
-    -------
-    list[dict[str, str]]
-        A list of result dicts with keys: title, url, snippet.
-    """
-    # Placeholder — returns mock data so the agent graph can run end-to-end
-    # without a real search backend.
-    return [
-        {
-            "title": f"Mock result for: {query}",
-            "url": "https://example.com/mock",
-            "snippet": (
-                f"This is a placeholder search result for the query '{query}'. "
-                "Replace this tool with a real search integration."
-            ),
-        }
-    ][:num_results]
-
-
-# LangChain-style tool metadata for future integration
-WEB_SEARCH_TOOL_DEFINITION: dict[str, Any] = {
-    "name": "web_search",
-    "description": (
-        "Search the web for information.  Use this when you need facts, "
-        "references, or current information that you don't already know."
-    ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "The search query.",
-            },
-            "num_results": {
-                "type": "integer",
-                "description": "Maximum number of results (default 5).",
-                "default": 5,
-            },
-        },
-        "required": ["query"],
-    },
-}
+#: Convenience alias for the web_search registry entry.
+WEB_SEARCH_TOOL: WriterTool = TOOL_REGISTRY["web_search"]
