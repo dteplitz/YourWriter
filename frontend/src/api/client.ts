@@ -13,6 +13,7 @@ import type {
   ToolUseEvent,
   ToolResultEvent,
 } from '../types';
+import type { Brief, Piece, ToolUseEvent, ToolResultEvent } from '../types/studio';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
 
@@ -221,6 +222,7 @@ export async function getPieces(writerId: string): Promise<Piece[]> {
   const response = await fetchWithAuth(`/writers/${writerId}/pieces`);
   return response.json();
 }
+
 
 export async function sendStudioStream(
   writerId: string,

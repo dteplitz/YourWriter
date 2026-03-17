@@ -4,6 +4,7 @@ import type { Brief, Piece, Writer } from '../types';
 import * as api from '../api/client';
 import StudioTransition from '../components/StudioTransition';
 import BriefSetup from '../components/BriefSetup';
+import SessionExperience from '../components/SessionExperience';
 import './writing.css';
 
 type StudioStep = 'transition' | 'brief' | 'session';
@@ -86,10 +87,13 @@ export default function StudioPage() {
         />
       )}
 
-      {step === 'session' && (
-        <div className="session-placeholder">
-          Session Experience — coming soon (Slice 4)
-        </div>
+      {step === 'session' && brief && (
+        <SessionExperience
+          writerId={writerId}
+          brief={brief}
+          onPieceSaved={(piece) => setPieces((prev) => [piece, ...prev])}
+          onSessionEnd={() => setStep('transition')}
+        />
       )}
     </div>
   );
