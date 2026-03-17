@@ -52,6 +52,9 @@ class Writer(Base):
     evolution_logs: Mapped[list["EvolutionLog"]] = relationship(
         "EvolutionLog", back_populates="writer", cascade="all, delete-orphan"
     )
+    pieces: Mapped[list["WriterPiece"]] = relationship(
+        "WriterPiece", back_populates="writer", cascade="all, delete-orphan"
+    )
 
 
 class WriterIdentity(Base):
@@ -87,6 +90,20 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     writer: Mapped["Writer"] = relationship("Writer", back_populates="messages")
+
+
+class WriterPiece(Base):
+    __tablename__ = "writer_pieces"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    writer_id: Mapped[int] = mapped_column(ForeignKey("writers.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    format: Mapped[str] = mapped_column(String(100), nullable=False, default="other")
+    word_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    writer: Mapped["Writer"] = relationship("Writer", back_populates="pieces")
 
 
 class EvolutionLog(Base):
