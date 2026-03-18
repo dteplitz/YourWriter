@@ -4,7 +4,7 @@ import ChatPanel from '../components/ChatPanel';
 import ConfigPanel from '../components/ConfigPanel';
 import EvolutionFeed from '../components/EvolutionFeed';
 import { useWriterStore } from '../stores/writerStore';
-import type { Identity } from '../types';
+import type { Identity, EvolutionDetectedEvent } from '../types';
 import * as api from '../api/client';
 
 export default function WriterPage() {
@@ -14,6 +14,7 @@ export default function WriterPage() {
   const [loading, setLoading] = useState(true);
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [heroVisible, setHeroVisible] = useState(true);
+  const [pendingEvolution, setPendingEvolution] = useState<EvolutionDetectedEvent | null>(null);
   const heroRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
 
@@ -106,16 +107,33 @@ export default function WriterPage() {
 
       {/* Hero: Artist Profile */}
       <div ref={heroRef} className="writer-hero">
-        <ConfigPanel writerId={id} onIdentityLoaded={setIdentity} />
+        <ConfigPanel
+          writerId={id}
+          onIdentityLoaded={setIdentity}
+          pendingEvolution={pendingEvolution}
+          onEvolutionAccepted={() => setPendingEvolution(null)}
+          onEvolutionRollback={() => {
+            setPendingEvolution(null);
+            api.getIdentity(id).then(setIdentity).catch(() => {});
+          }}
+        />
       </div>
 
       {/* Below the fold: Chat + Evolution */}
       <div className="writer-below-fold">
         <div className="writer-chat-col">
-          <ChatPanel writerId={id} onEnterStudio={() => navigate('/studio/' + id)} />
+          <ChatPanel
+            writerId={id}
+            onEnterStudio={() => navigate('/studio/' + id)}
+            onEvolution={(event) => {
+              setPendingEvolution(event);
+              // Reload identity from server to reflect the evolved state
+              api.getIdentity(id).then(setIdentity).catch(() => {});
+            }}
+          />
         </div>
         <div className="writer-evolution-col">
-          <EvolutionFeed writerId={id} />
+          <EvolutionFeed writerId={id} autoEvolutionEvent={pendingEvolution} />
         </div>
       </div>
     </div>

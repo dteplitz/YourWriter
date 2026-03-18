@@ -33,3 +33,19 @@ export interface WriterCreate {
 export interface WriterWithIdentity extends Writer {
   identity: Identity | null;
 }
+
+export interface EvolutionChange {
+  field: string;
+  action: 'add' | 'modify' | 'remove';
+  key?: string;            // para dict fields: emotions, personality, constraints
+  old_value?: unknown;
+  new_value?: unknown;
+  value?: unknown;         // para list fields: topics, memories, lifelong_objectives
+  reason: string;
+}
+
+export interface EvolutionDetectedEvent {
+  evolution_detected: true;
+  changes: EvolutionChange[];
+  reasoning: string;
+}
