@@ -6,8 +6,10 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from backend.api.router import api_router
+from backend.config import settings
 from backend.db.database import init_db
 
 
@@ -25,10 +27,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow all origins during development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -40,3 +41,8 @@ app.include_router(api_router)
 @app.get("/health")
 async def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# Serve the React frontend — must come AFTER all API routes
+if settings.is_production:
+    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")

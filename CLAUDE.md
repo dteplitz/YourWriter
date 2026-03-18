@@ -45,7 +45,16 @@ Ser honesto, no performativo. Si los docs son suficientes, decirlo. Si no, decir
 
 **La app la corre Damian** — `bash dev.sh` desde el root. Para QA pedile el puerto (frontend: 3000, backend: 8001).
 
-**Contexto de la última sesión (2026-03-17):** Sprint 5 completo y mergeado. El Studio existe como vista separada. WriterPage tiene layout scroll con hero (ConfigPanel) + chat below fold + RPG stats strip sticky. Los dos pipelines (chat vs studio) viven separados. Web search real via web_search_20250305. Próximo: Sprint 5.5 (deploy) o Sprint 6a (identity evolution) — a definir con Damian.
+**Contexto de la última sesión (2026-03-18):** Sprint 5.5 es el sprint activo (deploy en Railway, 3 etapas). Sprint 5 está completo y mergeado. Al inicio de la sesión se hizo onboarding profundo del código real — ver notas de código real más abajo. Etapa 1 de Sprint 5.5 todavía no tiene nada escrito (ningún archivo creado). El trabajo arranca desde cero en esta sesión.
+
+**Estado real del código (onboarding 2026-03-18 — leer antes de Sprint 5.5):**
+- `backend/main.py` — CORS hardcodeado `allow_origins=["*"]`. Sin `pydantic-settings`, sin `StaticFiles`. Health check en `GET /health` ya existe.
+- `backend/db/database.py` — `DATABASE_URL` hardcodeado SQLite. El WAL event listener usa `PRAGMA` — SQLite-only, va a romper con PostgreSQL. Hacerlo condicional en Sprint 5.5.
+- `backend/auth/auth.py` — lee `JWT_SECRET_KEY` de env (no `SECRET_KEY` como dice SPRINT55.md). Al crear `backend/config.py`, usar `JWT_SECRET_KEY` para ser consistente, o actualizar auth.py para leer del config object.
+- `requirements.txt` — faltan `asyncpg` y `pydantic-settings`. `anthropic>=0.40.0` debe ser `>=0.49.0` para web_search. `pytest-asyncio` e `httpx` están en venv pero no en requirements.txt.
+- `frontend/vite.config.ts` — sin dev proxy. En prod con monorepo `VITE_API_URL=/api` funciona (mismo origen).
+- Tests existentes: `backend/tests/test_chat_stream.py`, `backend/tests/test_studio.py`, `frontend/src/components/ConfigPanel.test.tsx`.
+- Ningún archivo de Sprint 5.5 existe todavía: no hay `Dockerfile`, `railway.toml`, `.dockerignore`, `backend/config.py`, `.github/workflows/`.
 
 **Learnings de subagentes (para próximos sprints con worktrees):**
 - Los agentes en worktrees NO heredan `.claude/settings.json` — copiar o crear el archivo en el worktree antes de lanzar el agente, o agregar las permissions al guidance note

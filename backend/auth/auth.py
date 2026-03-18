@@ -1,4 +1,3 @@
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
@@ -8,6 +7,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.config import settings
 from backend.db.database import get_db
 from backend.db.models import User
 from backend.services.user_service import get_user_by_email
@@ -16,9 +16,9 @@ from backend.services.user_service import get_user_by_email
 # Configuration
 # ---------------------------------------------------------------------------
 
-SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-secret-change-in-production")
+SECRET_KEY: str = settings.jwt_secret_key
 ALGORITHM: str = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))  # 24 h default
+ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 h
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
