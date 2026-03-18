@@ -101,26 +101,47 @@ Objetivo: la app accesible en una URL pública. Un solo servicio Railway que sir
 
 ---
 
-### Etapa 2 — CI/CD Pipeline
+### Etapa 2 — CI/CD Pipeline ✅ COMPLETA (2026-03-18)
 
-Objetivo: tests corren automáticamente en cada PR, deploy automático al mergear a main.
+Objetivo: tests corren automáticamente en cada PR, Claude revisa diffs antes de llegar a main.
 
 **Qué construimos:**
 
-1. **`.github/workflows/ci.yml`** — corre en cada PR:
-   - Backend: `python -m pytest backend/tests/`
-   - Frontend: `npm run test` + `npx tsc --noEmit`
-   - Bloquea merge si falla
+1. **`.github/workflows/ci.yml`** — corre en PRs a `main` y `sprint-*`:
+   - Job `backend-tests`: Python 3.11, `pip install`, `pytest backend/tests/` con `DATABASE_URL=sqlite+aiosqlite:///./test.db`
+   - Job `frontend-check`: Node 20, `npm ci`, `vitest run`, `tsc --noEmit`
+   - Los dos jobs corren en paralelo
 
-2. **`.github/workflows/deploy.yml`** — corre en push a main:
-   - Trigger el deploy en Railway via Railway CLI o webhook
-   - Railway también puede hacer auto-deploy desde GitHub directamente (más simple)
+2. **`.github/workflows/pr_review.yml`** — corre en PRs a `main` únicamente:
+   - Llama a `scripts/pr_review.py`
+   - Postea review como comentario (siempre)
+   - Exit 1 solo si detecta 🔴 CRITICAL (puede configurarse como required check)
 
-3. **`.github/workflows/pr_review.yml`** — Claude revisa cada PR:
-   - Obtiene el diff del PR
-   - Llama a Claude API con el diff + contexto del proyecto
-   - Postea review como comentario en el PR
-   - Si hay issues críticos (seguridad, data loss, breaking changes), puede bloquear el merge via status check
+3. **`scripts/pr_review.py`** — script Python standalone:
+   - Fetches diff via GitHub API (Accept: `application/vnd.github.v3.diff`)
+   - Llama a `claude-sonnet-4-6` con el diff + system prompt enfocado en los patrones del proyecto
+   - Postea comentario con Summary / Issues / Verdict
+   - Trunca diffs >30k chars
+
+4. **Auto-deploy**: Railway ya maneja esto — push a `main` → deploy automático. No necesitó workflow adicional.
+
+**Branch protection configurada en GitHub:**
+- Ruleset `main protection` → target: `main`
+- Required checks: `Backend Tests`, `Frontend Check`
+- `Claude Review` no es required — solo informativo
+
+**Secret requerido en GitHub repo:**
+- `ANTHROPIC_API_KEY` → Settings → Secrets and variables → Actions
+
+**QA de Etapa 2 confirmado (PR #1 test/ci-validation → main):**
+- ✅ Backend Tests — 12/12 passed
+- ✅ Frontend Check — vitest + tsc limpios
+- ✅ Claude Review — comentó correctamente ("trivial doc change, APPROVED")
+
+**Learnings de Etapa 2:**
+- GitHub migró de "Branch protection rules" a "Rulesets" — usar Add ruleset → New branch ruleset → target by pattern `main`
+- Los checks solo aparecen como opciones en el ruleset después de haber corrido al menos una vez — primero pushear y abrir un PR de test, luego configurar
+- `GITHUB_TOKEN` no necesita setearse como secret — GitHub Actions lo provee automáticamente con `pull-requests: write` si se declara en `permissions:`
 
 ---
 
@@ -187,26 +208,24 @@ Objetivo: pasar de `create_all` a migraciones versionadas con Alembic.
 
 Leer este archivo + ARCHITECTURE.md antes de arrancar.
 
-**Estado de Etapa 1:** ✅ COMPLETA. App deployada en `https://yourwriter-production.up.railway.app`. QA confirmado. Código en `main`. Ambiente local usa Docker Compose (`bash dev.sh`).
+**Estado actual:**
+- Etapa 1 ✅ — App en `https://yourwriter-production.up.railway.app`
+- Etapa 2 ✅ — CI/CD activo. Tests en PRs. Claude review en PRs a main.
+- Etapa 3 (next) — Alembic migrations
 
-**Próximo: Etapa 2 — CI/CD Pipeline**
+**Próximo: Etapa 3 — Alembic**
+
+El objetivo es pasar de `Base.metadata.create_all` (crea tablas si no existen, no maneja cambios) a migraciones versionadas. Hoy en prod Railway se hace `create_all` en cada startup — funciona porque la DB es nueva, pero cuando haya usuarios reales no podemos borrar y recrear.
 
 Qué hay que construir:
+1. `alembic init alembic` — crea `alembic/` con `env.py` y `versions/`
+2. Configurar `env.py` para leer `DATABASE_URL` desde `backend.config.settings`
+3. `alembic revision --autogenerate -m "initial schema"` — genera la primera migración desde los modelos actuales
+4. Reemplazar `create_all` en `backend/db/database.py::init_db()` por `alembic upgrade head`
+5. Actualizar `Dockerfile` production stage para correr `alembic upgrade head` antes de arrancar uvicorn
 
-1. **`.github/workflows/ci.yml`** — corre en cada PR:
-   - Backend tests: `python -m pytest backend/tests/`
-   - Frontend type check: `npx tsc --noEmit`
-   - Bloquea merge si falla
-
-2. **`.github/workflows/pr_review.yml`** — Claude revisa el diff de cada PR:
-   - Usa llamada directa a Anthropic API con el diff del PR
-   - Postea review como comentario en el PR via `gh` CLI o GitHub API
-   - Issues críticos (seguridad, data loss) → bloquea merge via status check
-
-3. **Auto-deploy en Railway**: Railway ya tiene auto-deploy desde GitHub configurado (activo desde Etapa 1 — cada push a `main` dispara un deploy). Solo verificar que esté activo en el dashboard.
-
-**Pitfalls para Etapa 2:**
-- Tests de backend en CI deben usar SQLite (variable de entorno `DATABASE_URL` seteada a SQLite en el workflow) — no usar la prod DB
-- El `GITHUB_TOKEN` para postear comentarios en PRs viene automático en GitHub Actions — no hay que setearlo como secret
-- `ANTHROPIC_API_KEY` sí hay que setearlo como secret del repo para el PR review
-- El PR review tiene que ignorar archivos auto-generados (package-lock.json, frontend/dist)
+**Pitfalls para Etapa 3:**
+- `alembic upgrade head` es síncrono — correrlo en startup antes de uvicorn (no en el lifespan async)
+- Con asyncpg, Alembic necesita el driver síncrono para autogenerate: `psycopg2` o configurar `run_migrations_offline` con URL síncrona
+- El `env.py` de Alembic necesita importar todos los modelos para que `autogenerate` los detecte
+- En Railway el startup command sería: `alembic upgrade head && uvicorn backend.main:app ...` — cambiar el CMD del Dockerfile

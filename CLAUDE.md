@@ -45,7 +45,7 @@ Ser honesto, no performativo. Si los docs son suficientes, decirlo. Si no, decir
 
 **La app la corre Damian** — `bash dev.sh` desde el root (usa Docker Compose, requiere Docker Desktop corriendo). Primera vez ~2 min de build. Para QA pedile el puerto (frontend: 3000, backend: 8001).
 
-**Contexto de la última sesión (2026-03-18):** Sprint 5.5 Etapa 1 ✅ completa. App deployada en `https://yourwriter-production.up.railway.app`. QA confirmado en prod y local. Próximo: Etapa 2 — CI/CD Pipeline (GitHub Actions: tests en PR, PR review con Claude API). Ver `SPRINT55.md` para el plan completo incluyendo pitfalls reales de la Etapa 1.
+**Contexto de la última sesión (2026-03-18):** Sprint 5.5 Etapas 1 y 2 ✅ completas. App en prod. CI activo (tests en PRs + Claude review en PRs a main). Branch protection configurada en GitHub (Rulesets). Próximo: Etapa 3 — Alembic migrations. Ver `SPRINT55.md` para el plan completo.
 
 **Estado real del código (post Etapa 1 — leer si vas a trabajar en backend/infra):**
 - `backend/config.py` — existe. `pydantic-settings`, lee `DATABASE_URL`, `JWT_SECRET_KEY`, `CORS_ORIGINS`, `ANTHROPIC_API_KEY`, `ENVIRONMENT`. Property `is_production`.
@@ -132,8 +132,8 @@ Ver los templates de agentes — son la fuente de verdad para patrones de área:
 - Sprint 5 ✅ Writing Experience — Artist Profile hero + Studio separado. Transición animada. Brief Setup, web search real, artefacto como documento, loop de iteración, discografía. WriterPage scroll layout con RPG stats strip.
 - **Sprint 5.5 🔄 (activo):**
   - Etapa 1 ✅ — App deployada en Railway (`https://yourwriter-production.up.railway.app`). Docker Compose local. PostgreSQL en prod, SQLite local.
-  - Etapa 2 (next) — CI/CD: GitHub Actions tests en PR + PR review automático con Claude API
-  - Etapa 3 — Alembic migrations
+  - Etapa 2 ✅ — CI/CD: GitHub Actions (tests en PRs, Claude review en PRs a main), branch protection
+  - Etapa 3 (next) — Alembic migrations
 - Sprint 6a: Identity Evolution — evolución autónoma post-sesión, memoria imperfecta, character sheet animado
 - Sprint 6b: Writer Initialization Flow — creación con descripción libre ("quiero un escritor tipo GRRM")
 - Sprint 7: Memory System — memoria episódica persistente
