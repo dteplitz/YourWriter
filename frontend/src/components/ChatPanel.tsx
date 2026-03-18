@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import type { ChatMessage } from '../types';
+import type { ChatMessage, EvolutionDetectedEvent } from '../types';
 import * as api from '../api/client';
 
 interface ChatPanelProps {
   writerId: string;
   onEnterStudio?: () => void;
+  onEvolution?: (event: EvolutionDetectedEvent) => void;
 }
 
-export default function ChatPanel({ writerId, onEnterStudio }: ChatPanelProps) {
+export default function ChatPanel({ writerId, onEnterStudio, onEvolution }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -64,6 +65,7 @@ export default function ChatPanel({ writerId, onEnterStudio }: ChatPanelProps) {
         (phase) => {
           setCurrentPhase(phase);
         },
+        onEvolution,
       );
 
       // Replace streaming placeholder with the final persisted message

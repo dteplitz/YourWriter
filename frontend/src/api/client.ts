@@ -8,6 +8,7 @@ import type {
   Identity,
   Constraints,
   EvolutionEntry,
+  EvolutionDetectedEvent,
 } from '../types';
 import type { Brief, Piece, ToolUseEvent, ToolResultEvent } from '../types/studio';
 
@@ -100,6 +101,7 @@ export async function sendMessageStream(
   content: string,
   onToken: (token: string) => void,
   onPhase?: (phase: string) => void,
+  onEvolution?: (event: EvolutionDetectedEvent) => void,
 ): Promise<{ messageId: number }> {
   const token = localStorage.getItem('token');
   const headers: Record<string, string> = {
@@ -127,6 +129,8 @@ export async function sendMessageStream(
 
   while (true) {
     const { done, value } = await reader.read();
+    // Only break when the server closes the connection — NOT on the `done` SSE event.
+    // evolution_detected events are emitted AFTER {"done": true}, so we must keep reading.
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });
@@ -149,6 +153,10 @@ export async function sendMessageStream(
       }
       if (data.done) {
         messageId = data.message_id;
+        // Do NOT break — server may still send evolution_detected events.
+      }
+      if (data.evolution_detected && onEvolution) {
+        onEvolution(data as EvolutionDetectedEvent);
       }
     }
   }
@@ -199,6 +207,15 @@ export async function getEvolutionLog(
 ): Promise<EvolutionEntry[]> {
   const response = await fetchWithAuth(`/writers/${writerId}/evolution`);
   return response.json();
+}
+
+export async function rollbackIdentity(writerId: number): Promise<Identity> {
+  const response = await fetchWithAuth(`/writers/${writerId}/identity/rollback`, {
+    method: 'POST',
+  });
+  // RollbackResponse has an `identity` field with the rolled-back Identity
+  const data = await response.json();
+  return data.identity as Identity;
 }
 
 // Studio
