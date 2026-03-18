@@ -142,9 +142,23 @@ Objetivo: pasar de `create_all` a migraciones versionadas con Alembic.
 
 ## Para el Claude de la próxima sesión
 
-Leer este archivo + ARCHITECTURE.md antes de arrancar.
+Leer este archivo + ARCHITECTURE.md antes de arrancar. El CLAUDE.md del proyecto tiene notas de código específicas del onboarding del 2026-03-18 que también conviene leer.
 
 **Etapa 1 es completamente autónoma** — todo código, sin intervención de Damian hasta el momento de crear el proyecto en Railway y setear las env vars (que son 5 minutos de clicks).
+
+**Estado de Etapa 1 al inicio de sesión 2026-03-18:** No hay nada escrito. Todos los archivos listados en "Archivos que se crean/modifican" arrancan desde cero o desde su estado actual.
+
+**Notas de código del onboarding (estado real de los archivos a modificar):**
+
+`backend/main.py` — actualmente: `load_dotenv()` al inicio, CORS hardcodeado `*`, `app.include_router(api_router)`, health check `GET /health`. Hay que: importar desde config, pasar origins desde config al middleware, agregar `StaticFiles` mount al final.
+
+`backend/db/database.py` — actualmente: `DATABASE_URL` hardcodeado como SQLite literal. El WAL event listener usa `PRAGMA` (SQLite-only). Hay que: leer `DATABASE_URL` desde config, hacer el event listener condicional (`if "sqlite" in DATABASE_URL`).
+
+`backend/auth/auth.py` — actualmente: `SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-in-production")`. El nombre de la env var es `JWT_SECRET_KEY`, no `SECRET_KEY`. Al crear `backend/config.py`, usar `jwt_secret_key: str = Field(default="dev-secret-change-in-production", alias="JWT_SECRET_KEY")` — o bien actualizar auth.py para que lea de config directamente.
+
+`requirements.txt` — actualmente faltan: `asyncpg`, `pydantic-settings`. `anthropic` está en `>=0.40.0` (actualizar a `>=0.49.0`). Los tests usan `pytest-asyncio` e `httpx` — agregar a requirements también (o a un requirements-dev.txt separado).
+
+`frontend/vite.config.ts` — no tiene proxy configurado. No necesita cambios para el approach monorepo. Solo crear `frontend/.env.production` con `VITE_API_URL=/api`.
 
 **Pitfalls conocidos:**
 - `StaticFiles` debe montarse DESPUÉS de todos los routes de la API, o va a interceptar las requests
@@ -152,3 +166,4 @@ Leer este archivo + ARCHITECTURE.md antes de arrancar.
 - `DATABASE_URL` de Railway viene como `postgresql://` pero asyncpg necesita `postgresql+asyncpg://` — hacer el replace en config.py
 - En Railway, el puerto lo provee la env var `$PORT` — no hardcodear 8001
 - El Dockerfile debe buildear el frontend ANTES de copiar el backend, para que `frontend/dist/` exista cuando FastAPI arranca
+- El WAL event listener en `database.py` usa SQLite `PRAGMA` — rompe con PostgreSQL si no se hace condicional
