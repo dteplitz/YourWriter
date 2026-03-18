@@ -1,3 +1,6 @@
+import os
+import sys
+
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -5,11 +8,20 @@ from sqlalchemy.pool import NullPool
 
 from backend.config import settings
 
-DATABASE_URL = settings.database_url
+# Read directly from env first, fall back to pydantic-settings value
+_raw_url = os.environ.get("DATABASE_URL") or settings.database_url
 
-# Railway provides postgresql:// but asyncpg needs postgresql+asyncpg://
-if DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+print(f"[database] DATABASE_URL prefix: {_raw_url[:40] if _raw_url else 'EMPTY/NONE'}", file=sys.stderr)
+
+# Normalize PostgreSQL URL to asyncpg driver
+if _raw_url.startswith("postgres://"):
+    DATABASE_URL = _raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
+elif _raw_url.startswith("postgresql://"):
+    DATABASE_URL = _raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+else:
+    DATABASE_URL = _raw_url
+
+print(f"[database] final scheme: {DATABASE_URL.split('://')[0]}", file=sys.stderr)
 
 _connect_args = {"timeout": 30} if "sqlite" in DATABASE_URL else {}
 
