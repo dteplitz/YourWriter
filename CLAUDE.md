@@ -45,16 +45,16 @@ Ser honesto, no performativo. Si los docs son suficientes, decirlo. Si no, decir
 
 **La app la corre Damian** — `bash dev.sh` desde el root (usa Docker Compose, requiere Docker Desktop corriendo). Primera vez ~2 min de build. Para QA pedile el puerto (frontend: 3000, backend: 8001).
 
-**Contexto de la última sesión (2026-03-18):** Sprint 5.5 es el sprint activo (deploy en Railway, 3 etapas). Sprint 5 está completo y mergeado. Al inicio de la sesión se hizo onboarding profundo del código real — ver notas de código real más abajo. Etapa 1 de Sprint 5.5 todavía no tiene nada escrito (ningún archivo creado). El trabajo arranca desde cero en esta sesión.
+**Contexto de la última sesión (2026-03-18):** Sprint 5.5 Etapa 1 ✅ completa. App deployada en `https://yourwriter-production.up.railway.app`. QA confirmado en prod y local. Próximo: Etapa 2 — CI/CD Pipeline (GitHub Actions: tests en PR, PR review con Claude API). Ver `SPRINT55.md` para el plan completo incluyendo pitfalls reales de la Etapa 1.
 
-**Estado real del código (onboarding 2026-03-18 — leer antes de Sprint 5.5):**
-- `backend/main.py` — CORS hardcodeado `allow_origins=["*"]`. Sin `pydantic-settings`, sin `StaticFiles`. Health check en `GET /health` ya existe.
-- `backend/db/database.py` — `DATABASE_URL` hardcodeado SQLite. El WAL event listener usa `PRAGMA` — SQLite-only, va a romper con PostgreSQL. Hacerlo condicional en Sprint 5.5.
-- `backend/auth/auth.py` — lee `JWT_SECRET_KEY` de env (no `SECRET_KEY` como dice SPRINT55.md). Al crear `backend/config.py`, usar `JWT_SECRET_KEY` para ser consistente, o actualizar auth.py para leer del config object.
-- `requirements.txt` — faltan `asyncpg` y `pydantic-settings`. `anthropic>=0.40.0` debe ser `>=0.49.0` para web_search. `pytest-asyncio` e `httpx` están en venv pero no en requirements.txt.
-- `frontend/vite.config.ts` — sin dev proxy. En prod con monorepo `VITE_API_URL=/api` funciona (mismo origen).
+**Estado real del código (post Etapa 1 — leer si vas a trabajar en backend/infra):**
+- `backend/config.py` — existe. `pydantic-settings`, lee `DATABASE_URL`, `JWT_SECRET_KEY`, `CORS_ORIGINS`, `ANTHROPIC_API_KEY`, `ENVIRONMENT`. Property `is_production`.
+- `backend/main.py` — CORS desde config. SPA routing: `/assets` mount + catch-all `/{full_path:path}` → `index.html`. **NO** usa `StaticFiles(html=True)`.
+- `backend/db/database.py` — normaliza `postgres://` y `postgresql://` a `postgresql+asyncpg://`. WAL listener condicional. Debug logging al stderr.
+- `Dockerfile` — 4 stages: `dev-backend`, `dev-frontend`, `frontend-builder`, `production`. CMD en shell form para `$PORT`.
+- `docker-compose.yml` — local dev. Backend en :8001 con hot reload, frontend en :3000 con HMR.
+- `railway.toml` — `builder = "DOCKERFILE"`, healthcheck `/health` timeout 120s, sin startCommand.
 - Tests existentes: `backend/tests/test_chat_stream.py`, `backend/tests/test_studio.py`, `frontend/src/components/ConfigPanel.test.tsx`.
-- Ningún archivo de Sprint 5.5 existe todavía: no hay `Dockerfile`, `railway.toml`, `.dockerignore`, `backend/config.py`, `.github/workflows/`.
 
 **Learnings de subagentes (para próximos sprints con worktrees):**
 - Los agentes en worktrees NO heredan `.claude/settings.json` — copiar o crear el archivo en el worktree antes de lanzar el agente, o agregar las permissions al guidance note
@@ -130,7 +130,10 @@ Ver los templates de agentes — son la fuente de verdad para patrones de área:
 - Sprint 3 ✅ ConfigPanel editable con animaciones de diff
 - Sprint 4 ✅ Rediseño visual del ConfigPanel — character sheet de RPG. Barras de progreso, badges, constraint cards.
 - Sprint 5 ✅ Writing Experience — Artist Profile hero + Studio separado. Transición animada. Brief Setup, web search real, artefacto como documento, loop de iteración, discografía. WriterPage scroll layout con RPG stats strip.
-- **Sprint 5.5 (next):** Deploy + CI/CD — PostgreSQL migration, containerización, deploy en Railway/Render, GitHub Actions (tests → deploy), PR review automático con Claude API (bloquea en issues críticos, comenta en el resto)
+- **Sprint 5.5 🔄 (activo):**
+  - Etapa 1 ✅ — App deployada en Railway (`https://yourwriter-production.up.railway.app`). Docker Compose local. PostgreSQL en prod, SQLite local.
+  - Etapa 2 (next) — CI/CD: GitHub Actions tests en PR + PR review automático con Claude API
+  - Etapa 3 — Alembic migrations
 - Sprint 6a: Identity Evolution — evolución autónoma post-sesión, memoria imperfecta, character sheet animado
 - Sprint 6b: Writer Initialization Flow — creación con descripción libre ("quiero un escritor tipo GRRM")
 - Sprint 7: Memory System — memoria episódica persistente

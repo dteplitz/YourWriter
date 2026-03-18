@@ -1,7 +1,7 @@
 # YourWriter — Arquitectura Técnica
 
 *Documento vivo. Se actualiza al final de cada sprint con lo que fue construido o modificado.*
-*Última actualización: Sprint 5.5 Etapa 1 — 2026-03-18*
+*Última actualización: Sprint 5.5 Etapa 1 completa — 2026-03-18*
 
 ---
 
@@ -19,6 +19,12 @@
 - Frontend: `http://localhost:3000`
 - Backend: `http://localhost:8001`
 - API base: `http://localhost:8001/api`
+
+**Producción:**
+- URL: `https://yourwriter-production.up.railway.app`
+- Platform: Railway (monorepo, single service)
+- DB: PostgreSQL managed (Railway)
+- Deploy: auto-deploy en push a `main`
 
 **Para correr la app (local):**
 ```bash
@@ -415,11 +421,10 @@ writer-page (overflow-y: auto)
 
 ## Notas técnicas para próximos sprints
 
-**Sprint 5.5 — Deploy:**
-- PostgreSQL migration (reemplazar SQLite)
-- Containerización + deploy en Railway/Render
-- GitHub Actions: tests → deploy
-- PR review automático con Claude API
+**Sprint 5.5 Etapa 2 — CI/CD:**
+- `.github/workflows/ci.yml` — tests en cada PR (backend pytest, frontend tsc)
+- `.github/workflows/pr_review.yml` — Claude revisa diffs de PRs via Anthropic API
+- Railway auto-deploy desde `main` ya está activo (configurado en Etapa 1)
 
 **Sprint 6a — Identity Evolution:**
 - Trigger: al guardar un `WriterPiece` → disparar `evolution_graph.py`

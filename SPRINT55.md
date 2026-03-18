@@ -7,54 +7,97 @@
 
 ## Etapas
 
-### Etapa 1 — Publicar la app (front + back en Railway)
+### Etapa 1 — Publicar la app (front + back en Railway) ✅ COMPLETA (2026-03-18)
 
-Objetivo: la app accesible en una URL pública. Un solo servicio Railway que sirve tanto la API como el frontend buildeado.
+**URL producción:** `https://yourwriter-production.up.railway.app`
 
-**Qué construimos:**
+Objetivo: la app accesible en una URL pública. Un solo servicio Railway que sirve tanto la API como el frontend buildeado. Ambiente local también dockerizado para paridad con prod.
+
+**Qué construimos (estado final real):**
 
 1. **`backend/config.py`** — settings centralizadas con `pydantic-settings`:
-   - `DATABASE_URL` (default: SQLite local, postgres en prod)
-   - `SECRET_KEY` (JWT signing)
-   - `CORS_ORIGINS` (lista de orígenes permitidos)
-   - `ANTHROPIC_API_KEY`
-   - `ENVIRONMENT` ("development" | "production")
+   - `database_url` (default: SQLite local), `jwt_secret_key`, `cors_origins`, `anthropic_api_key`, `environment`
+   - `@property is_production` — controla el SPA routing en main.py
 
-2. **`backend/main.py`** — actualizar CORS para usar config, agregar StaticFiles mount:
+2. **`backend/main.py`** — CORS desde config. SPA routing:
    ```python
-   # Al final, después de todos los routes:
-   app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
-   ```
-   El catch-all `html=True` hace que React Router funcione correctamente.
-
-3. **`frontend/.env.production`** — `VITE_API_URL=/api` (relativo, porque frontend y backend van a vivir en el mismo origen)
-
-4. **`Dockerfile`** — multi-stage:
-   - Stage 1 (node): `npm ci && npm run build` → genera `frontend/dist/`
-   - Stage 2 (python): instala deps, copia todo, `CMD uvicorn backend.main:app`
-
-5. **`.dockerignore`** — excluir `node_modules/`, `__pycache__/`, `.venv/`, `data/`
-
-6. **`railway.toml`** — Railway build + start config:
-   ```toml
-   [build]
-   builder = "DOCKERFILE"
-
-   [deploy]
-   startCommand = "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+   # NO usar StaticFiles(html=True) — no sirve index.html para rutas arbitrarias de React Router
+   # En su lugar: mount /assets estático + catch-all route
+   if settings.is_production:
+       app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
+       @app.get("/{full_path:path}")
+       async def serve_spa(full_path: str) -> FileResponse:
+           return FileResponse("frontend/dist/index.html")
    ```
 
-7. **`requirements.txt`** — agregar `asyncpg` y `pydantic-settings`
+3. **`backend/db/database.py`** — `DATABASE_URL` desde env/config con normalización:
+   - `postgres://` → `postgresql+asyncpg://` (Railway usa el formato corto)
+   - `postgresql://` → `postgresql+asyncpg://`
+   - WAL event listener condicional (`if "sqlite" in DATABASE_URL`)
+   - Debug logging al stderr para diagnóstico en prod
 
-**Lo que Damian hace en Railway (una sola vez):**
-1. Crear proyecto nuevo en railway.app → "Deploy from GitHub repo" → seleccionar `dteplitz/YourWriter`
-2. Agregar PostgreSQL service (botón "+ New" → Database → PostgreSQL)
-3. En el servicio principal, setear variables de entorno:
-   - `DATABASE_URL` → copiar desde el PostgreSQL service (Railway lo genera)
-   - `SECRET_KEY` → cualquier string largo random
-   - `ANTHROPIC_API_KEY` → tu key
-   - `CORS_ORIGINS` → la URL de Railway que te asigna (o `*` para empezar)
-4. Trigger deploy → en ~3 minutos la app está en `https://yourwriter-xxx.up.railway.app`
+4. **`backend/auth/auth.py`** — `SECRET_KEY` desde `settings.jwt_secret_key`
+
+5. **`frontend/.env.production`** — `VITE_API_URL=/api`
+
+6. **`Dockerfile`** — 4 stages:
+   - `dev-backend`: python + deps + uvicorn --reload (para docker compose local)
+   - `dev-frontend`: node + npm ci (para docker compose local con HMR)
+   - `frontend-builder`: npm ci + npm run build → genera `frontend/dist/`
+   - `production`: python + deps + backend + agents + frontend/dist (para Railway)
+   - CMD en shell form: `uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}` (shell expansion)
+
+7. **`docker-compose.yml`** — ambiente local Docker:
+   - `backend` service: target `dev-backend`, ports 8001, volume mount source, hot reload
+   - `frontend` service: target `dev-frontend`, ports 3000, volume mount con node_modules named volume
+   - `.env` en backend para vars locales
+
+8. **`railway.toml`** — `builder = "DOCKERFILE"`, healthcheck `/health` timeout 120s, NO startCommand (CMD del Dockerfile)
+
+9. **`requirements.txt`** — `asyncpg>=0.30.0`, `pydantic-settings>=2.0.0`, `bcrypt>=3.1.0,<4.0.0`, `httpx`, `pytest`, `pytest-asyncio`
+
+10. **`frontend/vite.config.ts`** — simplificado (solo vite, sin config de test)
+
+11. **`frontend/vitest.config.ts`** — separado (usa `vitest/config` para evitar conflicto de tipos)
+
+12. **`dev.sh`** — actualizado: `docker compose up --build`
+
+**Variables de entorno en Railway (las que Damian seteó):**
+
+| Variable | Valor |
+|----------|-------|
+| `DATABASE_URL` | `postgresql://...` (Railway lo genera al agregar PostgreSQL service) |
+| `JWT_SECRET_KEY` | string random seguro |
+| `ANTHROPIC_API_KEY` | API key de Anthropic (con comillas simples si tiene caracteres especiales) |
+| `ENVIRONMENT` | `production` |
+| `CORS_ORIGINS` | `*` (o URL específica de Railway)
+
+**QA de producción confirmado:**
+- ✅ Login / Register
+- ✅ Dashboard → crear writer
+- ✅ WriterPage (RPG strip, ConfigPanel, Chat)
+- ✅ Studio (transición, Brief Setup, pipeline completo con streaming, artefacto)
+- ✅ React Router — todas las rutas funcionan (login, dashboard, writer/:id, studio/:writerId)
+
+---
+
+**Learnings reales de Etapa 1 (pitfalls que ocurrieron en orden):**
+
+1. **Railway ignora el Dockerfile si el código no está pusheado** — intenta usar Railpack. Fix: commit + push primero.
+
+2. **TypeScript: imports duplicados en `client.ts`** — `Brief, Piece, ToolUseEvent, ToolResultEvent` importados desde dos lugares. Fix: eliminar del import de `../types`, dejar solo en `../types/studio`.
+
+3. **`vite.config.ts` + `vitest/config` conflicto de tipos** — vitest bundlea su propio vite, causan conflicto cuando `defineConfig` de vitest/config se mezcla con `@vitejs/plugin-react-swc`. Fix: separar en dos archivos.
+
+4. **`bcrypt>=4.0` rompe `passlib 1.7.4`** — `ValueError: password cannot be longer than 72 bytes` en runtime. Fix: `bcrypt>=3.1.0,<4.0.0`.
+
+5. **Healthcheck timeout 30s no alcanza** — langchain/langgraph/anthropic tardan >30s en cold start. Fix: `healthcheckTimeout = 120`.
+
+6. **`startCommand` en `railway.toml` NO expande variables de shell** — Railway lo ejecuta directamente sin shell, `$PORT` llega literal. Fix: sin `startCommand`, usar CMD en Dockerfile en shell form: `CMD uvicorn ... --port ${PORT:-8000}`.
+
+7. **`DATABASE_URL` desde Railway viene como `postgres://`** (no `postgresql+asyncpg://`) — SQLAlchemy no lo reconoce. Fix: normalización en `database.py` + `os.environ.get("DATABASE_URL")` como primera prioridad (antes del config de pydantic-settings).
+
+8. **`StaticFiles(html=True)` no sirve `index.html` para rutas React Router** — solo sirve para paths de directorio, no para `/login` o `/writer/123`. Fix: mount `/assets` + catch-all route `/{full_path:path}` que retorna `FileResponse("frontend/dist/index.html")`.
 
 ---
 
@@ -142,28 +185,28 @@ Objetivo: pasar de `create_all` a migraciones versionadas con Alembic.
 
 ## Para el Claude de la próxima sesión
 
-Leer este archivo + ARCHITECTURE.md antes de arrancar. El CLAUDE.md del proyecto tiene notas de código específicas del onboarding del 2026-03-18 que también conviene leer.
+Leer este archivo + ARCHITECTURE.md antes de arrancar.
 
-**Etapa 1 es completamente autónoma** — todo código, sin intervención de Damian hasta el momento de crear el proyecto en Railway y setear las env vars (que son 5 minutos de clicks).
+**Estado de Etapa 1:** ✅ COMPLETA. App deployada en `https://yourwriter-production.up.railway.app`. QA confirmado. Código en `main`. Ambiente local usa Docker Compose (`bash dev.sh`).
 
-**Estado de Etapa 1 al inicio de sesión 2026-03-18:** No hay nada escrito. Todos los archivos listados en "Archivos que se crean/modifican" arrancan desde cero o desde su estado actual.
+**Próximo: Etapa 2 — CI/CD Pipeline**
 
-**Notas de código del onboarding (estado real de los archivos a modificar):**
+Qué hay que construir:
 
-`backend/main.py` — actualmente: `load_dotenv()` al inicio, CORS hardcodeado `*`, `app.include_router(api_router)`, health check `GET /health`. Hay que: importar desde config, pasar origins desde config al middleware, agregar `StaticFiles` mount al final.
+1. **`.github/workflows/ci.yml`** — corre en cada PR:
+   - Backend tests: `python -m pytest backend/tests/`
+   - Frontend type check: `npx tsc --noEmit`
+   - Bloquea merge si falla
 
-`backend/db/database.py` — actualmente: `DATABASE_URL` hardcodeado como SQLite literal. El WAL event listener usa `PRAGMA` (SQLite-only). Hay que: leer `DATABASE_URL` desde config, hacer el event listener condicional (`if "sqlite" in DATABASE_URL`).
+2. **`.github/workflows/pr_review.yml`** — Claude revisa el diff de cada PR:
+   - Usa llamada directa a Anthropic API con el diff del PR
+   - Postea review como comentario en el PR via `gh` CLI o GitHub API
+   - Issues críticos (seguridad, data loss) → bloquea merge via status check
 
-`backend/auth/auth.py` — actualmente: `SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-in-production")`. El nombre de la env var es `JWT_SECRET_KEY`, no `SECRET_KEY`. Al crear `backend/config.py`, usar `jwt_secret_key: str = Field(default="dev-secret-change-in-production", alias="JWT_SECRET_KEY")` — o bien actualizar auth.py para que lea de config directamente.
+3. **Auto-deploy en Railway**: Railway ya tiene auto-deploy desde GitHub configurado (activo desde Etapa 1 — cada push a `main` dispara un deploy). Solo verificar que esté activo en el dashboard.
 
-`requirements.txt` — actualmente faltan: `asyncpg`, `pydantic-settings`. `anthropic` está en `>=0.40.0` (actualizar a `>=0.49.0`). Los tests usan `pytest-asyncio` e `httpx` — agregar a requirements también (o a un requirements-dev.txt separado).
-
-`frontend/vite.config.ts` — no tiene proxy configurado. No necesita cambios para el approach monorepo. Solo crear `frontend/.env.production` con `VITE_API_URL=/api`.
-
-**Pitfalls conocidos:**
-- `StaticFiles` debe montarse DESPUÉS de todos los routes de la API, o va a interceptar las requests
-- React Router necesita que el servidor sirva `index.html` para cualquier ruta que no sea un archivo — `html=True` en StaticFiles lo maneja
-- `DATABASE_URL` de Railway viene como `postgresql://` pero asyncpg necesita `postgresql+asyncpg://` — hacer el replace en config.py
-- En Railway, el puerto lo provee la env var `$PORT` — no hardcodear 8001
-- El Dockerfile debe buildear el frontend ANTES de copiar el backend, para que `frontend/dist/` exista cuando FastAPI arranca
-- El WAL event listener en `database.py` usa SQLite `PRAGMA` — rompe con PostgreSQL si no se hace condicional
+**Pitfalls para Etapa 2:**
+- Tests de backend en CI deben usar SQLite (variable de entorno `DATABASE_URL` seteada a SQLite en el workflow) — no usar la prod DB
+- El `GITHUB_TOKEN` para postear comentarios en PRs viene automático en GitHub Actions — no hay que setearlo como secret
+- `ANTHROPIC_API_KEY` sí hay que setearlo como secret del repo para el PR review
+- El PR review tiene que ignorar archivos auto-generados (package-lock.json, frontend/dist)
