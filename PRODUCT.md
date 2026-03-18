@@ -81,10 +81,9 @@ El Studio usa `web_search_20250305` (herramienta built-in de Anthropic SDK ≥0.
 | Feature | Sprint |
 |---------|--------|
 | Evolución autónoma post-sesión | Sprint 6a |
+| Animación del character sheet al evolucionar | Sprint 6a |
 | Alembic migrations | Sprint 5.5 Etapa 3 (antes de 6a) |
 | Writer initialization flow (GRRM-style) | Sprint 6b |
-| Animación del character sheet al evolucionar | Sprint 6a |
-| Evolución autónoma post-sesión | Sprint 6a |
 | Memory System (memoria episódica persistente) | Sprint 7 |
 | Polish + Agent Visualization | Sprint 8 |
 
