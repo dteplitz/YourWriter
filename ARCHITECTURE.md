@@ -434,3 +434,4 @@ writer-page (overflow-y: auto)
 **Sprint 6b — Writer Initialization Flow:**
 - Creación con descripción libre ("quiero un escritor tipo GRRM")
 - Reemplaza el modal simple actual
+
