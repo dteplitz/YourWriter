@@ -1,7 +1,7 @@
 # YourWriter — Arquitectura Técnica
 
 *Documento vivo. Se actualiza al final de cada sprint con lo que fue construido o modificado.*
-*Última actualización: Sprint 5 ✅ — 2026-03-17*
+*Última actualización: Sprint 5.5 Etapa 1 — 2026-03-18*
 
 ---
 
@@ -20,7 +20,30 @@
 - Backend: `http://localhost:8001`
 - API base: `http://localhost:8001/api`
 
-**Para correr la app:** `bash dev.sh` desde el root del proyecto. El script mata procesos zombie, limpia lock files y arranca backend y frontend.
+**Para correr la app (local):**
+```bash
+bash dev.sh          # arranca docker compose up --build
+```
+Requiere Docker Desktop corriendo. Primera vez tarda ~2 min (build de imágenes). Las siguientes arrancan rápido.
+
+Cuando ves esto, está listo:
+```
+backend-1   | INFO:     Application startup complete.
+frontend-1  | VITE ready in ... Local: http://localhost:3000/
+```
+
+- `Ctrl+C` para parar. `docker compose down` para limpiar contenedores.
+- Hot reload activo: cambios en `.py` recargan el backend, cambios en `.tsx/.ts` recargan el frontend.
+- Los datos de SQLite persisten en `./data/` entre sesiones (volume mount).
+
+**Ambientes:**
+| | Local | Railway (prod) |
+|---|---|---|
+| Cómo arranca | `bash dev.sh` → docker compose | auto-deploy desde push a `main` |
+| Backend | uvicorn `--reload`, source montado | uvicorn, source baked en imagen |
+| Frontend | vite dev HMR en :3000 | static files servidos por FastAPI |
+| DB | SQLite en `./data/` | PostgreSQL (Railway managed) |
+| Env vars | `.env` local | Variables de entorno en Railway |
 
 ---
 

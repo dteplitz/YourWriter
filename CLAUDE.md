@@ -43,7 +43,7 @@ Ser honesto, no performativo. Si los docs son suficientes, decirlo. Si no, decir
 
 **El enfoque de diseño — no lo pierdas:** El producto tiene dos espacios conceptuales: Artist Profile (management del writer, character sheet) y Studio (la sesión de grabación — experiencia activa separada, se entra con una transición animada). La inspiración viene de Football Manager (management vs. partido) y producción musical (la sesión, los takes, las notes del productor, la discografía). Ver `LINEAGE.md` para el razonamiento completo.
 
-**La app la corre Damian** — `bash dev.sh` desde el root. Para QA pedile el puerto (frontend: 3000, backend: 8001).
+**La app la corre Damian** — `bash dev.sh` desde el root (usa Docker Compose, requiere Docker Desktop corriendo). Primera vez ~2 min de build. Para QA pedile el puerto (frontend: 3000, backend: 8001).
 
 **Contexto de la última sesión (2026-03-18):** Sprint 5.5 es el sprint activo (deploy en Railway, 3 etapas). Sprint 5 está completo y mergeado. Al inicio de la sesión se hizo onboarding profundo del código real — ver notas de código real más abajo. Etapa 1 de Sprint 5.5 todavía no tiene nada escrito (ningún archivo creado). El trabajo arranca desde cero en esta sesión.
 
