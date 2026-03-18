@@ -183,6 +183,8 @@ word_count      int
 created_at
 ```
 
+*Sprint 6b agregará `session_config JSON` para guardar el fork de identidad de la sesión y permitir import post-sesión.*
+
 ### Patrón crítico de sesiones SQLite
 
 SQLite serializa writes. Si una sesión queda abierta durante una LLM call (10–30s), bloquea toda la base.
@@ -284,6 +286,11 @@ START
 ```
 
 **Nota:** El streaming del chat tampoco corre a través del grafo compilado. `chat_service.py::stream_writer_agent()` orquesta los nodos manualmente.
+
+### Principio: no SDK directo en el agent layer
+
+**Todo LLM call usa LangChain** (`ChatAnthropic` de `langchain_anthropic`). Sin excepciones.
+Deuda técnica existente: `evolution_nodes.py` y `chat_service.py::generate_brief()` usan `anthropic.AsyncAnthropic()` directamente — a refactorizar en sprint futuro.
 
 ### Tool Registry (Sprint 5)
 
@@ -411,10 +418,10 @@ writer-page (overflow-y: auto)
 
 | Qué | Dónde | Estado |
 |-----|-------|--------|
-| `evolution_graph.py` | `agents/graphs/` | Grafo construido, nunca se dispara |
-| `evolution_nodes.py` | `agents/nodes/` | Implementado, no conectado |
-| `evolution/identity.py` | `agents/evolution/` | Identity dataclass con to_dict/from_dict/to_prompt_string |
-| `backend/api/routes/evolution.py` | `backend/api/routes/` | Ruta existe, sin endpoints útiles aún |
+| `evolution_graph.py` | `agents/graphs/` | Grafo construido, no está en el hot path del Sprint 6a (reemplazado por 2-stage approach) |
+| `evolution_nodes.py` | `agents/nodes/` | Implementado — se simplifica en Sprint 6a para usar el nuevo servicio |
+| `evolution/identity.py` | `agents/evolution/` | Identity dataclass — fix en Sprint 6a (personality/emotions pasan a dict) |
+| `backend/api/routes/evolution.py` | `backend/api/routes/` | Ruta existe, se expande en Sprint 6a |
 | `memory` tool | `agents/tools/memory.py` | Dict en memoria, sin persistencia |
 
 ---
@@ -426,11 +433,22 @@ writer-page (overflow-y: auto)
 - `.github/workflows/pr_review.yml` — Claude revisa diffs de PRs via Anthropic API
 - Railway auto-deploy desde `main` ya está activo (configurado en Etapa 1)
 
-**Sprint 6a — Identity Evolution:**
-- Trigger: al guardar un `WriterPiece` → disparar `evolution_graph.py`
-- `evolution_graph.py` ya existe — necesita conectarse al trigger post-sesión
-- Actualizar el character sheet animado al recibir cambios
+**Sprint 5.5 Etapa 3 — Alembic:** ⏸ DIFERIDA — cuando haya usuarios reales en prod con datos que no podemos borrar.
 
-**Sprint 6b — Writer Initialization Flow:**
-- Creación con descripción libre ("quiero un escritor tipo GRRM")
-- Reemplaza el modal simple actual
+**Sprint 6a — Identity Evolution via Chat:**
+Ver `SPRINT6A.md` para el plan completo.
+
+Puntos clave:
+- Evolución trigger: post-respuesta del writer en el chat (inline en SSE stream)
+- 2-stage approach: IF detect (Haiku) → WHAT compute (Sonnet). Solo corre si IF dice sí.
+- Formato de identidad: unificado a dict en todas partes (fix en `Identity` dataclass)
+- Nuevo grafo LangGraph: `evolution_graph.py` — detect → [conditional] → compute → apply. Consistente con el resto del agent layer, extensible.
+- Nuevo servicio: `backend/services/evolution_service.py` — orquesta el grafo, persiste resultado
+- Nuevos SSE events: `{"evolution_detected": true, "changes": [...]}` después del `{"done": true}`
+- Rollback: `POST /writers/{id}/identity/rollback` — append-only, nunca destructivo
+- Checkpoint = cada versión en `writer_identities`. Rollback = nueva versión copiando la N-1.
+
+**Sprint 6b — Session Snapshot + Writer Initialization:**
+- Session snapshot: fork de identidad al entrar al Studio. Particularizaciones no contaminan el general.
+- Import post-sesión: el usuario puede importar stats de la sesión al general
+- Writer initialization flow: descripción libre → LLM genera identity inicial ("quiero un escritor tipo GRRM")

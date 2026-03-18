@@ -20,8 +20,8 @@ class Identity:
     """
 
     purpose: str = field(default="general-purpose writing")
-    personality: list[str] = field(default_factory=list)
-    emotions: list[str] = field(default_factory=list)
+    personality: dict[str, Any] = field(default_factory=dict)
+    emotions: dict[str, Any] = field(default_factory=dict)
     memories: list[str] = field(default_factory=list)
     topics: list[str] = field(default_factory=list)
     constraints: dict[str, Any] = field(default_factory=dict)
@@ -31,8 +31,8 @@ class Identity:
         """Serialize the identity to a plain dictionary."""
         return {
             "purpose": self.purpose,
-            "personality": list(self.personality),
-            "emotions": list(self.emotions),
+            "personality": dict(self.personality),
+            "emotions": dict(self.emotions),
             "memories": list(self.memories),
             "topics": list(self.topics),
             "constraints": dict(self.constraints),
@@ -48,8 +48,8 @@ class Identity:
         """
         return cls(
             purpose=data.get("purpose", "general-purpose writing"),
-            personality=list(data.get("personality", [])),
-            emotions=list(data.get("emotions", [])),
+            personality=dict(data.get("personality", {})),
+            emotions=dict(data.get("emotions", {})),
             memories=list(data.get("memories", [])),
             topics=list(data.get("topics", [])),
             constraints=dict(data.get("constraints", {})),
@@ -64,11 +64,11 @@ class Identity:
             sections.append(f"Purpose: {self.purpose}")
 
         if self.personality:
-            traits = ", ".join(self.personality)
+            traits = ", ".join(f"{k}: {v}" for k, v in self.personality.items())
             sections.append(f"Personality: {traits}")
 
         if self.emotions:
-            emotions = ", ".join(self.emotions)
+            emotions = ", ".join(f"{k}: {v}" for k, v in self.emotions.items())
             sections.append(f"Current emotions: {emotions}")
 
         if self.memories:

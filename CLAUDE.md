@@ -18,6 +18,7 @@
 | Estado funcional del producto | `PRODUCT.md` |
 | Estado técnico del producto | `ARCHITECTURE.md` |
 | Razonamiento de diseño | `LINEAGE.md` |
+| Terminología canónica del producto | `GLOSSARY.md` |
 
 **En el retro:** si aprendemos algo sobre la relación o el proceso → actualizar `~/.claude/CLAUDE.md`. Si aprendemos algo sobre YourWriter → actualizar este archivo o los docs vivos.
 
@@ -30,8 +31,9 @@ No recordás nada de lo anterior sobre este proyecto. El contexto de quién es D
 **Leer al inicio de cada sesión (antes de proponer nada):**
 1. `PRODUCT.md` — qué está construido funcionalmente
 2. `ARCHITECTURE.md` — estructura técnica actual
-3. `SPRINT55.md` — plan del sprint activo *(actualizar esta línea cada sprint)*
+3. `SPRINT6A.md` — plan del sprint activo *(actualizar esta línea cada sprint)*
 4. `LINEAGE.md` — razonamiento de diseño (siempre relevante)
+5. `GLOSSARY.md` — terminología canónica (leer antes de tomar decisiones de UX o naming)
 
 **Diagnóstico al despertar — después de leer, decirle a Damian:**
 - Qué entendés con confianza
@@ -45,7 +47,7 @@ Ser honesto, no performativo. Si los docs son suficientes, decirlo. Si no, decir
 
 **La app la corre Damian** — `bash dev.sh` desde el root (usa Docker Compose, requiere Docker Desktop corriendo). Primera vez ~2 min de build. Para QA pedile el puerto (frontend: 3000, backend: 8001).
 
-**Contexto de la última sesión (2026-03-18):** Sprint 5.5 Etapas 1 y 2 ✅ completas. App en prod. CI activo (tests en PRs + Claude review en PRs a main). Branch protection configurada en GitHub (Rulesets). Próximo: Etapa 3 — Alembic migrations. Ver `SPRINT55.md` para el plan completo.
+**Contexto de la última sesión (2026-03-18):** Sprint 5.5 completo (Etapas 1+2). Etapa 3 (Alembic) ⏸ diferida. Sprint 6a planificado: Identity Evolution via chat — 2-stage approach (IF/Haiku + WHAT/Sonnet), rollback endpoint, animación en character sheet. Session snapshot + import deferred a 6b. Ver `SPRINT6A.md` para el plan completo.
 
 **Estado real del código (post Etapa 1 — leer si vas a trabajar en backend/infra):**
 - `backend/config.py` — existe. `pydantic-settings`, lee `DATABASE_URL`, `JWT_SECRET_KEY`, `CORS_ORIGINS`, `ANTHROPIC_API_KEY`, `ENVIRONMENT`. Property `is_production`.
@@ -137,6 +139,6 @@ Ver los templates de agentes — son la fuente de verdad para patrones de área:
 - Sprint 6a: Identity Evolution — evolución autónoma post-sesión, memoria imperfecta, character sheet animado
 - Sprint 6b: Writer Initialization Flow — creación con descripción libre ("quiero un escritor tipo GRRM")
 - Sprint 7: Memory System — memoria episódica persistente
-- Sprint 8: Polish + Agent Visualization (v1 ready)
+- Sprint 8: UX/UI dedicado + Polish — momento natural después de 6b cuando el ciclo completo funciona (crear → sesión → evolución). Incluye Agent Visualization. Antes de este sprint: grooming de UX desde la experiencia, no desde los features.
 
 Ver `SPEC.md` para la spec completa.
