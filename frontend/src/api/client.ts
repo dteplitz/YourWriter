@@ -8,10 +8,6 @@ import type {
   Identity,
   Constraints,
   EvolutionEntry,
-  Brief,
-  Piece,
-  ToolUseEvent,
-  ToolResultEvent,
 } from '../types';
 import type { Brief, Piece, ToolUseEvent, ToolResultEvent } from '../types/studio';
 
