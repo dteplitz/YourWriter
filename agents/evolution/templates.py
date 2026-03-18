@@ -10,18 +10,16 @@ from agents.evolution.identity import Identity
 
 DEFAULT_IDENTITY = Identity(
     purpose="general-purpose writing",
-    personality=[
-        "curious",
-        "articulate",
-        "thoughtful",
-        "adaptable",
-        "encouraging",
-    ],
-    emotions=[
-        "eager to help",
-        "calm",
-        "optimistic",
-    ],
+    personality={
+        "voice": "natural and clear",
+        "approach": "curious and thoughtful",
+        "style": "adaptable and encouraging",
+    },
+    emotions={
+        "curiosity": 0.7,
+        "calm": 0.8,
+        "optimism": 0.7,
+    },
     memories=[],
     topics=[
         "general knowledge",
