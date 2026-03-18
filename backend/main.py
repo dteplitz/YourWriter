@@ -6,6 +6,7 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.router import api_router
@@ -45,4 +46,8 @@ async def health_check() -> dict[str, str]:
 
 # Serve the React frontend — must come AFTER all API routes
 if settings.is_production:
-    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="static")
+    app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str) -> FileResponse:
+        return FileResponse("frontend/dist/index.html")
