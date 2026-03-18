@@ -1,7 +1,7 @@
 # YourWriter — Estado Funcional del Producto
 
 *Documento vivo. Se actualiza al final de cada sprint con lo que quedó funcional.*
-*Última actualización: Sprint 5 ✅ — 2026-03-17*
+*Última actualización: Sprint 5.5 ✅ — 2026-03-18*
 
 ---
 
@@ -81,10 +81,10 @@ El Studio usa `web_search_20250305` (herramienta built-in de Anthropic SDK ≥0.
 | Feature | Sprint |
 |---------|--------|
 | Evolución autónoma post-sesión | Sprint 6a |
+| Alembic migrations | Sprint 5.5 Etapa 3 (antes de 6a) |
 | Writer initialization flow (GRRM-style) | Sprint 6b |
 | Animación del character sheet al evolucionar | Sprint 6a |
-| Deploy (PostgreSQL, Railway/Render, CI/CD) | Sprint 5.5 |
-| PR review automático con Claude API | Sprint 5.5 |
+| Evolución autónoma post-sesión | Sprint 6a |
 | Memory System (memoria episódica persistente) | Sprint 7 |
 | Polish + Agent Visualization | Sprint 8 |
 
