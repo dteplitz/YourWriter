@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.auth.auth import get_current_user
 from backend.db.database import get_db
 from backend.db.models import User, WriterIdentity
+from backend.schemas.evolution import RollbackResponse
 from backend.schemas.identity import ConstraintsUpdate, IdentityResponse, IdentityUpdate
 from backend.services.writer_service import get_writer
 
@@ -100,3 +101,51 @@ async def update_constraints(
     await db.flush()
     await db.refresh(new_identity)
     return IdentityResponse.model_validate(new_identity)
+
+
+@router.post("/{writer_id}/identity/rollback", response_model=RollbackResponse)
+async def rollback_identity(
+    writer_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> RollbackResponse:
+    """Crea nueva versión copiando la N-1. Append-only, nunca destruye historial."""
+    await get_writer(db, writer_id=writer_id, user_id=current_user.id)
+
+    # Cargar últimas 2 versiones
+    result = await db.execute(
+        select(WriterIdentity)
+        .where(WriterIdentity.writer_id == writer_id)
+        .order_by(WriterIdentity.version.desc())
+        .limit(2)
+    )
+    versions = list(result.scalars().all())
+
+    if len(versions) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No previous version to rollback to",
+        )
+
+    current, previous = versions[0], versions[1]
+
+    new_identity = WriterIdentity(
+        writer_id=writer_id,
+        personality=previous.personality,
+        emotions=previous.emotions,
+        memories=previous.memories,
+        topics=previous.topics,
+        constraints=previous.constraints,
+        lifelong_objectives=previous.lifelong_objectives,
+        version=current.version + 1,
+    )
+    db.add(new_identity)
+    await db.flush()
+    await db.refresh(new_identity)
+
+    return RollbackResponse(
+        writer_id=writer_id,
+        rolled_back_to_version=previous.version,
+        new_version=new_identity.version,
+        identity=IdentityResponse.model_validate(new_identity),
+    )
