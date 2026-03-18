@@ -64,12 +64,12 @@ class Identity:
             sections.append(f"Purpose: {self.purpose}")
 
         if self.personality:
-            traits = ", ".join(f"{k}: {v}" for k, v in self.personality.items())
-            sections.append(f"Personality: {traits}")
+            traits = "\n".join(f"  {k}: {v}" for k, v in self.personality.items())
+            sections.append(f"Personality:\n{traits}")
 
         if self.emotions:
-            emotions = ", ".join(f"{k}: {v}" for k, v in self.emotions.items())
-            sections.append(f"Current emotions: {emotions}")
+            emotions = "\n".join(f"  {k}: {v}" for k, v in self.emotions.items())
+            sections.append(f"Current emotions:\n{emotions}")
 
         if self.memories:
             mem_lines = "\n".join(f"  - {m}" for m in self.memories)
