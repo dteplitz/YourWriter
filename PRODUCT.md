@@ -1,13 +1,13 @@
 # YourWriter — Estado Funcional del Producto
 
 *Documento vivo. Se actualiza al final de cada sprint con lo que quedó funcional.*
-*Última actualización: Sprint 5.5 ✅ — 2026-03-18*
+*Última actualización: Sprint 6a ✅ — 2026-03-19*
 
 ---
 
 ## Qué es el producto
 
-YourWriter es una plataforma donde los usuarios crean escritores IA con personalidad, emociones y objetivos propios. Cada escritor tiene una identidad configurable que moldea cómo escribe. La visión a largo plazo es que esa identidad evolucione sola después de cada sesión de escritura.
+YourWriter es una plataforma donde los usuarios crean escritores IA con personalidad, emociones y objetivos propios. Cada escritor tiene una identidad configurable que moldea cómo escribe. Esa identidad evoluciona de forma autónoma a través del chat — el usuario moldea al writer conversando, y el sistema detecta las señales y propone cambios graduales.
 
 El producto tiene dos espacios conceptuales (ambos construidos desde Sprint 5):
 - **Artist Profile** — configurar y gestionar al escritor (WriterPage)
@@ -15,7 +15,21 @@ El producto tiene dos espacios conceptuales (ambos construidos desde Sprint 5):
 
 ---
 
-## Lo que existe hoy (post-Sprint 5)
+## Modelo de identidad (tres capas)
+
+Definido en Sprint 6a planning. Guía cualquier decisión sobre la identidad del writer:
+
+| Capa | Qué es | Cómo evoluciona | Dónde vive |
+|------|--------|----------------|-----------|
+| **General stats** | Quién ES el writer | A través del chat — el usuario moldea conversando | `WriterIdentity` (versionado) |
+| **Session config** | Cómo encarará ESTA pieza | El usuario particulariza en el Studio (brief, iterations) | Fork del general, no persiste en general |
+| **Post-sesión** | Qué queda de la sesión | El usuario decide qué importar al general | Memories o import explícito |
+
+"Escribí esto en tono oscuro" → session config. "Quiero que seas más oscuro" → general stats.
+
+---
+
+## Lo que existe hoy (post-Sprint 6a)
 
 ### Autenticación
 
@@ -45,7 +59,7 @@ Al scrollear hacia abajo, el header sticky gana una fila compacta con mini emoti
 
 **Zona bajo el fold — Chat + Evolution Timeline**
 - **ChatPanel**: conversación libre con el writer. Keyword detection determina si responde como chat o activa el pipeline de escritura. El botón **"Studio →"** lleva al Studio.
-- **EvolutionFeed**: log de cambios de identidad (por ahora, solo cambios manuales).
+- **EvolutionFeed**: log de cambios de identidad — cambios manuales y evoluciones automáticas via chat (diferenciados visualmente).
 
 ### Studio — sesión de escritura activa
 
@@ -70,6 +84,25 @@ Se accede vía botón "Studio →" desde el ChatPanel. El Studio es una vista co
 
 6. **Discografía** — las piezas se acumulan como historial del writer. Expandibles, con fecha relativa en español.
 
+### Identity Evolution via Chat ← Sprint 6a
+
+Cuando el usuario moldea al writer a través del chat — pide enfoques, refuerza rasgos, repite patrones de estilo — el sistema detecta esas señales y propone cambios graduales a la identidad.
+
+**Pipeline de 2 etapas:**
+1. **Stage 1 (Detect — Haiku):** Analiza el historial del chat. ¿Esta conversación forma identidad? → `{should_evolve: bool, confidence: float, signal: str}`. Umbral conservador — un solo exchange no triggera, un patrón repetido sí.
+2. **Stage 2 (Compute — Sonnet):** Propone cambios incrementales y específicos. Recibe el `signal` del Stage 1 como contexto. Nunca hace rewrites — siempre deltas graduales.
+
+**Flujo completo:**
+- La evolución corre inline, después del `{"done": true}` del SSE stream del chat
+- Si hay cambios, se persiste una nueva versión de `WriterIdentity` en la DB
+- Se emiten eventos SSE de evolución al frontend
+- El **character sheet se anima** mostrando los diffs (barras de emoción que suben/bajan, nuevos traits, nuevos topics)
+- El usuario ve un **banner "Deshacer"** durante 30 segundos
+- El `EvolutionFeed` registra los cambios automáticamente
+
+**Rollback (append-only):**
+`POST /writers/{id}/identity/rollback` — crea una nueva versión copiando los campos de la versión anterior. Nunca destructivo — el historial completo siempre queda.
+
 ### Web Search real
 
 El Studio usa `web_search_20250305` (herramienta built-in de Anthropic SDK ≥0.49.0). La búsqueda se realiza durante la fase de research antes del outline. Las queries y resultados son visibles en tiempo real via el tool use pill.
@@ -80,10 +113,9 @@ El Studio usa `web_search_20250305` (herramienta built-in de Anthropic SDK ≥0.
 
 | Feature | Sprint |
 |---------|--------|
-| Evolución autónoma post-sesión | Sprint 6a |
-| Animación del character sheet al evolucionar | Sprint 6a |
-| Alembic migrations | Sprint 5.5 Etapa 3 (antes de 6a) |
+| Session snapshot + import post-sesión | Sprint 6b |
 | Writer initialization flow (GRRM-style) | Sprint 6b |
+| Alembic migrations | Sprint 5.5 Etapa 3 ⏸ (cuando haya usuarios reales en prod) |
 | Memory System (memoria episódica persistente) | Sprint 7 |
 | Polish + Agent Visualization | Sprint 8 |
 
@@ -102,6 +134,8 @@ El Studio usa `web_search_20250305` (herramienta built-in de Anthropic SDK ≥0.
 8. Scrollear → ChatPanel + EvolutionFeed
    - Chat libre → respuesta conversacional
    - Pedir escritura por keywords → pipeline con fases
+   - Tras la respuesta: pipeline de evolución corre en background
+   - Si hay evolución: character sheet se anima, banner "Deshacer" por 30s, EvolutionFeed se actualiza
 9. Click "Studio →" → transición animada al Studio
 10. Studio: Brief Setup → sesión activa (fases + tool use) → artefacto
 11. Artefacto: copiar / iterar con notas / finalizar sesión

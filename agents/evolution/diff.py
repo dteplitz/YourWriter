@@ -70,9 +70,18 @@ def compare_identities(
     if old_purpose != new_purpose:
         changes.append(f"Changed purpose from \"{old_purpose}\" to \"{new_purpose}\"")
 
-    list_fields = [
-        ("personality", "personality trait"),
+    # Dict fields — personality and emotions are now dicts
+    dict_fields = [
+        ("personality", "personality"),
         ("emotions", "emotion"),
+    ]
+
+    for field_key, label in dict_fields:
+        changes.extend(
+            _dict_diff(label, old.get(field_key, {}), new.get(field_key, {}))
+        )
+
+    list_fields = [
         ("memories", "memory"),
         ("topics", "topic"),
         ("lifelong_objectives", "lifelong objective"),

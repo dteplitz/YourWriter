@@ -1055,6 +1055,74 @@ a {
   font-style: italic;
 }
 
+/* Auto-evolution entries — visually distinct from manual edits */
+.evolution-entry--auto {
+  border-left-color: var(--warning);
+  background: rgba(250, 204, 21, 0.06);
+}
+
+.evolution-auto-chip {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--warning);
+  background: rgba(250, 204, 21, 0.15);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  border-radius: 3px;
+  padding: 0.05rem 0.35rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.evolution-auto-change {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.evolution-auto-field {
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: lowercase;
+}
+
+.evolution-auto-key {
+  color: var(--text-muted);
+}
+
+.evolution-auto-action {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.evolution-auto-action--add {
+  color: var(--success);
+  background: rgba(74, 222, 128, 0.12);
+}
+
+.evolution-auto-action--modify {
+  color: var(--warning);
+  background: rgba(250, 204, 21, 0.12);
+}
+
+.evolution-auto-action--remove {
+  color: var(--danger);
+  background: rgba(224, 85, 85, 0.12);
+}
+
+.evolution-auto-reason {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.72rem;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 960px) {
   .writer-below-fold {

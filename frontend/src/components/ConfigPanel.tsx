@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { Identity } from '../types';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { Identity, EvolutionDetectedEvent } from '../types';
 import * as api from '../api/client';
 import { EmotionBar } from './EmotionBar';
 import { TraitBadge } from './TraitBadge';
@@ -9,6 +9,9 @@ import '../config-panel.css';
 interface ConfigPanelProps {
   writerId: string;
   onIdentityLoaded?: (identity: Identity) => void;
+  pendingEvolution?: EvolutionDetectedEvent | null;
+  onEvolutionAccepted?: () => void;
+  onEvolutionRollback?: () => void;
 }
 
 type KVPair = { key: string; value: string };
@@ -133,7 +136,13 @@ function KVTable({ pairs, onChange, addLabel }: KVTableProps) {
   );
 }
 
-export default function ConfigPanel({ writerId, onIdentityLoaded }: ConfigPanelProps) {
+export default function ConfigPanel({
+  writerId,
+  onIdentityLoaded,
+  pendingEvolution,
+  onEvolutionAccepted,
+  onEvolutionRollback,
+}: ConfigPanelProps) {
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -149,6 +158,11 @@ export default function ConfigPanel({ writerId, onIdentityLoaded }: ConfigPanelP
   // Animation state
   const [changedKeys, setChangedKeys] = useState<Set<string>>(new Set());
   const [versionBump, setVersionBump] = useState(false);
+
+  // Undo banner state (30s window after evolution)
+  const [showUndoBanner, setShowUndoBanner] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadIdentity();
@@ -167,6 +181,49 @@ export default function ConfigPanel({ writerId, onIdentityLoaded }: ConfigPanelP
     const timer = setTimeout(() => setVersionBump(false), 400);
     return () => clearTimeout(timer);
   }, [versionBump]);
+
+  // React to incoming pendingEvolution: animate diff, reload identity, show undo banner for 30s
+  useEffect(() => {
+    if (!pendingEvolution || !identity) return;
+
+    // Compute changed keys from the evolution event so diff animation fires
+    const changed = new Set<string>();
+    for (const change of pendingEvolution.changes) {
+      if (change.key) {
+        changed.add(`${change.field}.${change.key}`);
+      } else {
+        changed.add(change.field);
+      }
+    }
+    setChangedKeys(changed);
+    setVersionBump(true);
+
+    // Silently refresh identity so the panel shows evolved values (v2, new emotions, etc.)
+    // Do NOT call loadIdentity() — that sets loading=true which would hide the Undo banner.
+    api.getIdentity(writerId).then((data) => {
+      setIdentity(data);
+      onIdentityLoaded?.(data);
+    }).catch(() => {});
+
+    // Show undo banner, auto-dismiss after 30s
+    setShowUndoBanner(true);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => {
+      setShowUndoBanner(false);
+      onEvolutionAccepted?.();
+    }, 30000);
+
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    };
+  }, [pendingEvolution]);
+
+  // Cleanup undo timer on unmount
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    };
+  }, []);
 
   const loadIdentity = async () => {
     setLoading(true);
@@ -253,6 +310,39 @@ export default function ConfigPanel({ writerId, onIdentityLoaded }: ConfigPanelP
     }
   };
 
+  const handleRollback = async () => {
+    if (!identity || rollingBack) return;
+    setRollingBack(true);
+
+    // Clear the undo timer — we're acting before the 30s expires
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+
+    try {
+      const rolledBackIdentity = await api.rollbackIdentity(identity.writer_id);
+
+      // Animate diff between current and rolled-back identity
+      const changed = computeChangedKeys(
+        identity.personality,
+        rolledBackIdentity.personality,
+        identity.constraints,
+        rolledBackIdentity.constraints,
+        identity.emotions,
+        rolledBackIdentity.emotions
+      );
+
+      setIdentity(rolledBackIdentity);
+      onIdentityLoaded?.(rolledBackIdentity);
+      setChangedKeys(changed);
+      setVersionBump(true);
+      setShowUndoBanner(false);
+      onEvolutionRollback?.();
+    } catch (err) {
+      console.error('Failed to rollback identity:', err);
+    } finally {
+      setRollingBack(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="config-panel">
@@ -298,6 +388,23 @@ export default function ConfigPanel({ writerId, onIdentityLoaded }: ConfigPanelP
           )}
         </div>
       </div>
+
+      {/* Evolution undo banner */}
+      {showUndoBanner && (
+        <div className="config-evolution-banner">
+          <span className="config-evolution-banner-text">
+            ⚡ Writer evolved automatically
+          </span>
+          <button
+            type="button"
+            className="config-evolution-undo-btn"
+            onClick={handleRollback}
+            disabled={rollingBack}
+          >
+            {rollingBack ? 'Undoing...' : 'Undo'}
+          </button>
+        </div>
+      )}
 
       {/* Personality */}
       <section className="config-section">

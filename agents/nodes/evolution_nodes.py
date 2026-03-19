@@ -1,201 +1,200 @@
-"""Evolution pipeline nodes — analyze, evaluate, decide, apply.
+"""Evolution pipeline nodes — detect, compute, apply.
 
-These nodes form the identity-evolution pipeline that runs after a
-writing session to incrementally update the writer's personality,
-emotions, memories, and objectives.
+These three nodes implement the 2-stage identity-evolution pipeline:
+
+  detect_node  — Stage 1 (Haiku): decide whether the conversation contains
+                 identity-shaping signals.
+  compute_node — Stage 2 (Sonnet): propose specific, incremental changes.
+  apply_node   — No LLM: apply structured changes to the current identity dict.
+
+All LLM calls use ChatAnthropic from langchain_anthropic — no SDK calls.
 """
 
 from __future__ import annotations
 
 import json
+import logging
+import re
 from typing import Any
 
-import anthropic
+logger = logging.getLogger(__name__)
 
-from agents.prompts.system import EVOLUTION_SYSTEM_PROMPT
+
+def _parse_json_response(raw: str) -> dict:
+    """Parse a JSON response that may be wrapped in a markdown code block."""
+    raw = raw.strip()
+    # Strip markdown code fences: ```json ... ``` or ``` ... ```
+    raw = re.sub(r'^```(?:json)?\s*', '', raw)
+    raw = re.sub(r'\s*```$', '', raw.strip())
+    return json.loads(raw.strip())
+
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import HumanMessage, SystemMessage
+
+from agents.prompts.system import EVOLUTION_DETECT_PROMPT, EVOLUTION_SYSTEM_PROMPT
 from agents.evolution.identity import Identity
 
 
-async def _call_claude(system: str, user_message: str) -> str:
-    """Helper: single-turn Claude call."""
-    client = anthropic.AsyncAnthropic()
-    response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=4096,
-        system=system,
-        messages=[{"role": "user", "content": user_message}],
-    )
-    return response.content[0].text
-
-
 # ---------------------------------------------------------------------------
-# Analyze
+# detect_node — Stage 1 (Haiku)
 # ---------------------------------------------------------------------------
 
-async def analyze_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Analyze the recent writing session and user reactions.
+async def detect_node(state: dict[str, Any]) -> dict[str, Any]:
+    """Detect whether the conversation contains identity-shaping signals.
 
-    Produces a summary of what happened, what the user liked or disliked,
-    and what patterns are emerging.
+    Uses a fast, conservative Haiku call to decide IF evolution should happen.
+    Defaults to no-evolution on any parse failure.
     """
-    content_written = state.get("content_written", "")
-    user_feedback = state.get("user_feedback", "")
+    chat_history: list[dict] = state.get("chat_history", [])
+    last_user_message: str = state.get("last_user_message", "")
 
-    analysis = await _call_claude(
-        system=(
-            "You are an analytical assistant.  Given a piece of writing and "
-            "the user's feedback, produce a concise analysis covering: "
-            "(1) the writing's strengths, (2) its weaknesses, "
-            "(3) implicit user preferences revealed by their feedback, "
-            "(4) any patterns worth noting.  Be specific and evidence-based."
-        ),
-        user_message=(
-            f"## Content written\n{content_written}\n\n"
-            f"## User feedback\n{user_feedback}"
-        ),
+    # Format chat history for the prompt
+    history_lines: list[str] = []
+    for msg in chat_history:
+        role = msg.get("role", "unknown")
+        content = msg.get("content", "")
+        history_lines.append(f"{role.upper()}: {content}")
+    formatted_history = "\n".join(history_lines) if history_lines else "(no previous messages)"
+
+    prompt = EVOLUTION_DETECT_PROMPT.format(
+        chat_history=formatted_history,
+        last_user_message=last_user_message,
     )
 
-    return {"analysis": analysis}
+    llm = ChatAnthropic(model="claude-haiku-4-5-20251001")  # type: ignore[call-arg]
+    messages = [
+        SystemMessage(content=prompt),
+        HumanMessage(content="Analyze the conversation and respond with the JSON object."),
+    ]
+
+    try:
+        response = await llm.ainvoke(messages)
+        raw = response.content if isinstance(response.content, str) else str(response.content)
+        result = _parse_json_response(raw)
+        return {
+            "should_evolve": bool(result.get("should_evolve", False)),
+            "confidence": float(result.get("confidence", 0.0)),
+            "signal": str(result.get("signal", "")),
+        }
+    except Exception:
+        logger.warning("detect_node failed — defaulting to no-evolve", exc_info=True)
+        return {
+            "should_evolve": False,
+            "confidence": 0.0,
+            "signal": "",
+        }
 
 
 # ---------------------------------------------------------------------------
-# Evaluate
+# compute_node — Stage 2 (Sonnet)
 # ---------------------------------------------------------------------------
 
-async def evaluate_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Compare the analysis against the current identity.
+async def compute_node(state: dict[str, Any]) -> dict[str, Any]:
+    """Propose specific, incremental identity changes.
 
-    Identifies gaps between who the writer *is* (identity) and what the
-    analysis suggests the writer *should become*.
+    Uses Sonnet with the signal from detect_node to produce structured JSON
+    describing what should change and why.
     """
-    current_identity = state.get("current_identity", {})
-    analysis = state.get("analysis", "")
-
-    identity_obj = Identity.from_dict(current_identity)
-    identity_text = identity_obj.to_prompt_string()
-
-    evaluation = await _call_claude(
-        system=(
-            "You are an identity evaluator for an AI writer.  Compare the "
-            "writer's current identity against a recent analysis of their "
-            "work and user feedback.  Identify: (1) traits that served the "
-            "writing well, (2) traits that were absent but needed, "
-            "(3) emotions that should shift, (4) new topics or skills "
-            "demonstrated, (5) objectives that need updating.  Be specific."
-        ),
-        user_message=(
-            f"## Current identity\n{identity_text}\n\n"
-            f"## Analysis of recent session\n{analysis}"
-        ),
-    )
-
-    return {"evaluation": evaluation}
-
-
-# ---------------------------------------------------------------------------
-# Decide
-# ---------------------------------------------------------------------------
-
-async def decide_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Propose specific identity changes with reasons.
-
-    Uses the full EVOLUTION_SYSTEM_PROMPT to output structured JSON
-    describing incremental changes.
-    """
-    current_identity = state.get("current_identity", {})
-    content_written = state.get("content_written", "")
-    user_feedback = state.get("user_feedback", "")
+    current_identity: dict[str, Any] = state.get("current_identity", {})
+    signal: str = state.get("signal", "")
 
     identity_obj = Identity.from_dict(current_identity)
     identity_text = identity_obj.to_prompt_string()
 
     prompt = EVOLUTION_SYSTEM_PROMPT.format(
+        signal=signal,
         current_identity=identity_text,
-        content_written=content_written,
-        user_feedback=user_feedback,
     )
 
-    raw_response = await _call_claude(
-        system=prompt,
-        user_message=(
-            "Based on the analysis and evaluation above, propose specific "
-            "changes to the writer's identity.  Return ONLY valid JSON."
-        ),
-    )
+    llm = ChatAnthropic(model="claude-sonnet-4-6")  # type: ignore[call-arg]
+    messages = [
+        SystemMessage(content=prompt),
+        HumanMessage(content="Propose the identity changes based on the signal above. Return ONLY valid JSON."),
+    ]
 
-    # Parse the JSON response; fall back gracefully on parse errors
     try:
-        result = json.loads(raw_response)
-        changes = result.get("changes", [])
-        reasoning = result.get("overall_reasoning", "")
-    except json.JSONDecodeError:
-        changes = []
-        reasoning = f"Failed to parse evolution response: {raw_response[:200]}"
-
-    return {"changes": changes, "reasoning": reasoning}
+        response = await llm.ainvoke(messages)
+        raw = response.content if isinstance(response.content, str) else str(response.content)
+        result = _parse_json_response(raw)
+        return {
+            "changes": result.get("changes", []),
+            "reasoning": result.get("overall_reasoning", ""),
+        }
+    except Exception:
+        logger.warning("compute_node failed — returning empty changes", exc_info=True)
+        return {
+            "changes": [],
+            "reasoning": "parse error",
+        }
 
 
 # ---------------------------------------------------------------------------
-# Apply
+# apply_node — No LLM
 # ---------------------------------------------------------------------------
 
 async def apply_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Apply proposed changes to produce the updated identity.
+    """Apply structured changes to the current identity dict.
 
-    This node does not call the LLM — it applies the structured changes
-    from the decide node to the current identity dict and returns the
-    final evolution result.
+    No LLM call. Takes the list of changes from compute_node and mutates
+    a copy of current_identity, returning it as updated_identity.
+
+    Dict fields (emotions, personality, constraints): changes use "key" to
+    index into the dict.
+    List fields (topics, memories, lifelong_objectives): changes use "value".
+    Failures are silently skipped — the field or key simply does not exist.
     """
-    current_identity = state.get("current_identity", {})
+    current_identity: dict[str, Any] = state.get("current_identity", {})
     changes: list[dict[str, Any]] = state.get("changes", [])
-    reasoning: str = state.get("reasoning", "")
 
-    # Deep copy via Identity dataclass so we don't mutate state
-    identity = Identity.from_dict(current_identity)
-    updated = identity.to_dict()
+    # Work on a copy via Identity round-trip to avoid mutating state
+    identity_obj = Identity.from_dict(current_identity)
+    identity = identity_obj.to_dict()
+
+    # Dict fields — keyed access
+    DICT_FIELDS = {"emotions", "personality", "constraints"}
+    # List fields — value-based access
+    LIST_FIELDS = {"topics", "memories", "lifelong_objectives"}
 
     for change in changes:
         field = change.get("field", "")
         action = change.get("action", "")
-        value = change.get("value", "")
-        old_value = change.get("old_value")
 
-        if field not in updated:
+        if field not in identity:
             continue
 
-        target = updated[field]
+        target = identity[field]
 
-        if isinstance(target, str):
-            # Scalar fields like "purpose"
-            if action in ("add", "modify"):
-                updated[field] = value
+        if field in DICT_FIELDS and isinstance(target, dict):
+            key = change.get("key", "")
+            new_value = change.get("new_value")
+            old_value = change.get("old_value")
 
-        elif isinstance(target, list):
-            if action == "add" and value not in target:
-                target.append(value)
+            if action in ("modify", "add"):
+                if key:
+                    target[key] = new_value
+            elif action == "remove":
+                if key and key in target:
+                    del target[key]
+
+        elif field in LIST_FIELDS and isinstance(target, list):
+            value = change.get("value", "")
+            old_value = change.get("old_value", "")
+
+            if action == "add":
+                if value and value not in target:
+                    target.append(value)
             elif action == "remove":
                 removal = old_value if old_value else value
                 if removal in target:
                     target.remove(removal)
-            elif action == "modify" and old_value in target:
-                idx = target.index(old_value)
-                target[idx] = value
+            elif action == "modify":
+                if old_value in target:
+                    idx = target.index(old_value)
+                    target[idx] = value
 
-        elif isinstance(target, dict):
-            if action == "add" or action == "modify":
-                # For constraints dict, we parse the key from the value
-                # if the change specifies a key-value pair
-                if isinstance(value, dict):
-                    target.update(value)
-                else:
-                    # Treat value as the new constraint value for a key
-                    key = old_value if old_value else "custom"
-                    target[key] = value
-            elif action == "remove" and old_value in target:
-                del target[old_value]
+        elif field == "purpose" and isinstance(target, str):
+            value = change.get("value", change.get("new_value", ""))
+            if action in ("modify", "add") and value:
+                identity[field] = value
 
-    return {
-        "current_identity": updated,
-        "changes": changes,
-        "reasoning": reasoning,
-    }
+    return {"updated_identity": identity}
