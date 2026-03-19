@@ -41,8 +41,9 @@ stories/
 htmlcov/
 .pytest_cache/
 
-# Claude Code (local tooling)
-.claude/
+# Claude Code — commit project settings, ignore personal overrides
+.claude/settings.local.json
+.claude/todos.json
 
 # Playwright MCP (local tooling)
 .playwright-mcp/
