@@ -13,7 +13,17 @@ All LLM calls use ChatAnthropic from langchain_anthropic — no SDK calls.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
+
+
+def _parse_json_response(raw: str) -> dict:
+    """Parse a JSON response that may be wrapped in a markdown code block."""
+    raw = raw.strip()
+    # Strip markdown code fences: ```json ... ``` or ``` ... ```
+    raw = re.sub(r'^```(?:json)?\s*', '', raw)
+    raw = re.sub(r'\s*```$', '', raw.strip())
+    return json.loads(raw.strip())
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -57,7 +67,7 @@ async def detect_node(state: dict[str, Any]) -> dict[str, Any]:
     try:
         response = await llm.ainvoke(messages)
         raw = response.content if isinstance(response.content, str) else str(response.content)
-        result = json.loads(raw)
+        result = _parse_json_response(raw)
         return {
             "should_evolve": bool(result.get("should_evolve", False)),
             "confidence": float(result.get("confidence", 0.0)),
@@ -102,7 +112,7 @@ async def compute_node(state: dict[str, Any]) -> dict[str, Any]:
     try:
         response = await llm.ainvoke(messages)
         raw = response.content if isinstance(response.content, str) else str(response.content)
-        result = json.loads(raw)
+        result = _parse_json_response(raw)
         return {
             "changes": result.get("changes", []),
             "reasoning": result.get("overall_reasoning", ""),
