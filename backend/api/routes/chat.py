@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from typing import Annotated
@@ -149,10 +150,13 @@ async def send_message_stream(
                             "lifelong_objectives": identity_row.lifelong_objectives or [],
                         }
 
-                        evo_result = await run_evolution(
-                            current_identity=current_identity,
-                            chat_history=history,
-                            last_user_message=body.content,
+                        evo_result = await asyncio.wait_for(
+                            run_evolution(
+                                current_identity=current_identity,
+                                chat_history=history,
+                                last_user_message=body.content,
+                            ),
+                            timeout=45.0,
                         )
 
                         if evo_result:
