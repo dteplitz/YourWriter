@@ -13,8 +13,11 @@ All LLM calls use ChatAnthropic from langchain_anthropic — no SDK calls.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_json_response(raw: str) -> dict:
@@ -74,7 +77,7 @@ async def detect_node(state: dict[str, Any]) -> dict[str, Any]:
             "signal": str(result.get("signal", "")),
         }
     except Exception:
-        # Conservative default: do not evolve on any failure
+        logger.warning("detect_node failed — defaulting to no-evolve", exc_info=True)
         return {
             "should_evolve": False,
             "confidence": 0.0,
@@ -118,6 +121,7 @@ async def compute_node(state: dict[str, Any]) -> dict[str, Any]:
             "reasoning": result.get("overall_reasoning", ""),
         }
     except Exception:
+        logger.warning("compute_node failed — returning empty changes", exc_info=True)
         return {
             "changes": [],
             "reasoning": "parse error",
