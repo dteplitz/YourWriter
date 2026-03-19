@@ -10,15 +10,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.auth import get_current_user
 from backend.db.database import async_session, get_db
-from backend.db.models import ChatMessage, MessageRole, User
+from backend.db.models import ChatMessage, MessageRole, User, WriterIdentity
 from backend.schemas.chat import ChatMessageCreate, ChatMessageResponse
+from backend.schemas.evolution import EvolutionDetectedEvent
 from backend.schemas.studio import BriefRequest, BriefResponse
 from backend.services.chat_service import (
+    _load_history,
     generate_brief,
     invoke_writer_agent,
     stream_studio_session,
     stream_writer_agent,
 )
+from backend.services.evolution_service import persist_evolution, run_evolution
 from backend.services.writer_service import get_writer
 
 
@@ -120,6 +123,51 @@ async def send_message_stream(
                 await save_db.refresh(assistant_msg)
 
             yield f"data: {json.dumps({'done': True, 'message_id': assistant_msg.id})}\n\n"
+
+            # Evolution hook — rate limit: only on substantial messages (>15 words)
+            # Runs silently; never blocks or errors the chat stream.
+            if len(body.content.split()) > 15:
+                try:
+                    async with async_session() as evo_db:
+                        history = await _load_history(evo_db, writer_id)
+                        id_result = await evo_db.execute(
+                            select(WriterIdentity)
+                            .where(WriterIdentity.writer_id == writer_id)
+                            .order_by(WriterIdentity.version.desc())
+                            .limit(1)
+                        )
+                        identity_row = id_result.scalar_one_or_none()
+
+                    if identity_row:
+                        current_identity = {
+                            "purpose": writer.purpose,
+                            "personality": identity_row.personality or {},
+                            "emotions": identity_row.emotions or {},
+                            "memories": identity_row.memories or [],
+                            "topics": identity_row.topics or [],
+                            "constraints": identity_row.constraints or {},
+                            "lifelong_objectives": identity_row.lifelong_objectives or [],
+                        }
+
+                        evo_result = await run_evolution(
+                            current_identity=current_identity,
+                            chat_history=history,
+                            last_user_message=body.content,
+                        )
+
+                        if evo_result:
+                            async with async_session() as evo_db:
+                                await persist_evolution(evo_db, writer_id, evo_result)
+                                await evo_db.commit()
+
+                            evo_event = EvolutionDetectedEvent(
+                                changes=evo_result.changes,
+                                reasoning=evo_result.reasoning,
+                            )
+                            yield f"data: {json.dumps(evo_event.model_dump())}\n\n"
+                except Exception:
+                    logger.warning("Evolution failed silently for writer %s", writer_id, exc_info=True)
+
         except RuntimeError as exc:
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
         except Exception:
