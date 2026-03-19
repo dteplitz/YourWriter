@@ -1,7 +1,7 @@
 # YourWriter — Arquitectura Técnica
 
 *Documento vivo. Se actualiza al final de cada sprint con lo que fue construido o modificado.*
-*Última actualización: Sprint 5.5 Etapa 1 completa — 2026-03-18*
+*Última actualización: Sprint 6a ✅ — 2026-03-19*
 
 ---
 
@@ -68,8 +68,10 @@ yourwriter/
 │   │   └── models.py        # SQLAlchemy models
 │   ├── schemas/
 │   │   ├── ...              # Pydantic schemas existentes
-│   │   └── studio.py        # BriefRequest, BriefResponse, PieceResponse (Sprint 5)
+│   │   ├── studio.py        # BriefRequest, BriefResponse, PieceResponse (Sprint 5)
+│   │   └── evolution.py     # EvolutionEvent, EvolutionResult Pydantic schemas (Sprint 6a)
 │   └── services/            # Business logic (writer_service, chat_service, user_service)
+│       └── evolution_service.py  # run_evolution() + persist_evolution() (Sprint 6a)
 │
 ├── frontend/src/
 │   ├── api/
@@ -89,12 +91,12 @@ yourwriter/
 ├── agents/
 │   ├── graphs/
 │   │   ├── writer_graph.py  # LangGraph principal (chat + write pipeline)
-│   │   └── evolution_graph.py # Grafo de evolución (existe, no se dispara aún)
+│   │   └── evolution_graph.py # Grafo de evolución 2-stage: detect → compute → apply (Sprint 6a)
 │   ├── nodes/
 │   │   ├── chat_node.py     # Nodo de chat conversacional
 │   │   ├── writing_nodes.py # outline_node, draft_node, refine_node, studio_refine_node_stream
 │   │   ├── research_node.py # research_node_stream: web_search_20250305 con SSE (Sprint 5)
-│   │   └── evolution_nodes.py
+│   │   └── evolution_nodes.py  # detect_node (Haiku) + compute_node (Sonnet) + apply_node (Sprint 6a)
 │   ├── tools/
 │   │   ├── registry.py      # Tool Registry con WriterTool dataclass + get_anthropic_tools() (Sprint 5)
 │   │   ├── web_search.py    # STUB — ya no se usa (reemplazado por registry.py)
@@ -217,12 +219,13 @@ DELETE /writers/{id}                     → 204
 
 ### Identity — `/api/writers`
 ```
-GET /writers/{id}/identity                          → IdentityResponse
-PUT /writers/{id}/identity  body: IdentityUpdate    → IdentityResponse (nueva versión)
-PUT /writers/{id}/constraints body: ConstraintsUpdate → IdentityResponse (nueva versión)
+GET  /writers/{id}/identity                          → IdentityResponse
+PUT  /writers/{id}/identity  body: IdentityUpdate    → IdentityResponse (nueva versión)
+PUT  /writers/{id}/constraints body: ConstraintsUpdate → IdentityResponse (nueva versión)
+POST /writers/{id}/identity/rollback                 → IdentityResponse (nueva versión copiando N-1)
 ```
 
-Cada PUT de identidad crea una nueva fila en `writer_identities` con `version+1`. No hay updates destructivos — el historial queda.
+Cada PUT/rollback de identidad crea una nueva fila en `writer_identities` con `version+1`. Nunca hay updates destructivos — el historial queda completo.
 
 ### Pieces — `/api/writers` ← Sprint 5
 ```
@@ -244,8 +247,14 @@ POST /chat/{id}/studio/stream    body: {brief}    → SSE stream                
 {"token": "text chunk"}
 {"phase": "outlining" | "drafting" | "refining"}
 {"done": true, "message_id": 123}
+{"evolution_detected": true, "changes": [
+  {"field": "emotions", "action": "modify", "key": "melancholy", "old_value": 0.3, "new_value": 0.5, "reason": "..."},
+  {"field": "topics", "action": "add", "value": "noir fiction", "reason": "..."}
+], "reasoning": "..."}
 {"error": "message"}
 ```
+
+Los eventos de evolución se emiten **después** del `done`. El stream permanece abierto hasta que la evolución completa o el timeout (45s). El frontend puede procesar el `done` inmediatamente (re-habilitar chat UI) y seguir el stream abierto para los eventos de evolución.
 
 ### SSE Event types — studio/stream ← Sprint 5
 ```json
@@ -286,6 +295,20 @@ START
 ```
 
 **Nota:** El streaming del chat tampoco corre a través del grafo compilado. `chat_service.py::stream_writer_agent()` orquesta los nodos manualmente.
+
+### Evolution Pipeline (Sprint 6a)
+
+`evolution_service.py::run_evolution()` orquesta el grafo. `persist_evolution()` crea la nueva versión de identidad en una sesión DB corta separada.
+
+```
+START → detect_node (Haiku) → [should_evolve?]
+                                    ├── no → END (returns None)
+                                    └── sí → compute_node (Sonnet) → apply_node (sin LLM) → END
+```
+
+**`EvolutionState`** (TypedDict): `current_identity`, `chat_history`, `signal`, `confidence`, `changes`, `reasoning`, `new_identity`
+
+**Pitfall crítico resuelto:** Haiku y Sonnet pueden envolver el JSON en ` ```json\n...\n``` `. `_parse_json_response()` en `evolution_nodes.py` hace strip de las fences antes de `json.loads()`.
 
 ### Principio: no SDK directo en el agent layer
 
@@ -418,11 +441,8 @@ writer-page (overflow-y: auto)
 
 | Qué | Dónde | Estado |
 |-----|-------|--------|
-| `evolution_graph.py` | `agents/graphs/` | Grafo construido, no está en el hot path del Sprint 6a (reemplazado por 2-stage approach) |
-| `evolution_nodes.py` | `agents/nodes/` | Implementado — se simplifica en Sprint 6a para usar el nuevo servicio |
-| `evolution/identity.py` | `agents/evolution/` | Identity dataclass — fix en Sprint 6a (personality/emotions pasan a dict) |
-| `backend/api/routes/evolution.py` | `backend/api/routes/` | Ruta existe, se expande en Sprint 6a |
-| `memory` tool | `agents/tools/memory.py` | Dict en memoria, sin persistencia |
+| `memory` tool | `agents/tools/memory.py` | Dict en memoria, sin persistencia — pendiente Sprint 7 |
+| `web_search.py` | `agents/tools/` | STUB — reemplazado por `registry.py` + `research_node.py` |
 
 ---
 
@@ -435,18 +455,17 @@ writer-page (overflow-y: auto)
 
 **Sprint 5.5 Etapa 3 — Alembic:** ⏸ DIFERIDA — cuando haya usuarios reales en prod con datos que no podemos borrar.
 
-**Sprint 6a — Identity Evolution via Chat:**
-Ver `SPRINT6A.md` para el plan completo.
+**Sprint 6a — Identity Evolution via Chat: ✅ COMPLETADO (2026-03-19)**
 
-Puntos clave:
+Puntos clave de la implementación:
 - Evolución trigger: post-respuesta del writer en el chat (inline en SSE stream)
-- 2-stage approach: IF detect (Haiku) → WHAT compute (Sonnet). Solo corre si IF dice sí.
-- Formato de identidad: unificado a dict en todas partes (fix en `Identity` dataclass)
-- Nuevo grafo LangGraph: `evolution_graph.py` — detect → [conditional] → compute → apply. Consistente con el resto del agent layer, extensible.
-- Nuevo servicio: `backend/services/evolution_service.py` — orquesta el grafo, persiste resultado
-- Nuevos SSE events: `{"evolution_detected": true, "changes": [...]}` después del `{"done": true}`
-- Rollback: `POST /writers/{id}/identity/rollback` — append-only, nunca destructivo
-- Checkpoint = cada versión en `writer_identities`. Rollback = nueva versión copiando la N-1.
+- 2-stage approach: detect (Haiku) → compute (Sonnet). Solo corre si detect dice sí.
+- Rate limiting: solo corre si el mensaje tiene >15 palabras o hay >3 exchanges sin check
+- `_parse_json_response()`: strip de markdown code fences antes de `json.loads()` — Haiku wrapa JSON en ` ```json ``` `; sin este fix el pipeline falla silenciosamente
+- Timeout: `asyncio.wait_for(run_evolution(), timeout=45)` para prevenir hangs
+- `evolution_service.py`: separa LLM calls de sesiones DB (regla de sesión corta)
+- Frontend: `onDone` callback re-habilita el chat UI inmediatamente; el stream sigue abierto para `evolution_detected`
+- Config panel: actualización silenciosa de identidad en el effect de `pendingEvolution` — NO llama `loadIdentity()` (pondría `loading=true` y ocultaría el Undo banner)
 
 **Sprint 6b — Session Snapshot + Writer Initialization:**
 - Session snapshot: fork de identidad al entrar al Studio. Particularizaciones no contaminan el general.

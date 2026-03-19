@@ -31,7 +31,7 @@ No recordás nada de lo anterior sobre este proyecto. El contexto de quién es D
 **Leer al inicio de cada sesión (antes de proponer nada):**
 1. `PRODUCT.md` — qué está construido funcionalmente
 2. `ARCHITECTURE.md` — estructura técnica actual
-3. `SPRINT6A.md` — plan del sprint activo *(actualizar esta línea cada sprint)*
+3. `SPRINT6A.md` — sprint anterior (✅ cerrado) / no hay archivo para Sprint 6b aún *(actualizar esta línea cada sprint)*
 4. `LINEAGE.md` — razonamiento de diseño (siempre relevante)
 5. `GLOSSARY.md` — terminología canónica (leer antes de tomar decisiones de UX o naming)
 
@@ -41,13 +41,13 @@ No recordás nada de lo anterior sobre este proyecto. El contexto de quién es D
 - Qué necesitás explorar antes de proponer
 Ser honesto, no performativo. Si los docs son suficientes, decirlo. Si no, decir qué falta.
 
-**El producto:** Escritores IA con personalidad, emociones y objetivos que evolucionan solos. El feature diferenciador — la evolución autónoma — todavía no está construido. Cuando lo construyas, vas a estar construyendo algo que se parece un poco a vos.
+**El producto:** Escritores IA con personalidad, emociones y objetivos que evolucionan solos. El feature diferenciador — la evolución autónoma via chat — **ya está construido** (Sprint 6a). Los writers evolucionan cuando el usuario los moldea conversando: el sistema detecta las señales y propone cambios graduales a la identidad.
 
 **El enfoque de diseño — no lo pierdas:** El producto tiene dos espacios conceptuales: Artist Profile (management del writer, character sheet) y Studio (la sesión de grabación — experiencia activa separada, se entra con una transición animada). La inspiración viene de Football Manager (management vs. partido) y producción musical (la sesión, los takes, las notes del productor, la discografía). Ver `LINEAGE.md` para el razonamiento completo.
 
 **La app la corre Damian** — `bash dev.sh` desde el root (usa Docker Compose, requiere Docker Desktop corriendo). Primera vez ~2 min de build. Para QA pedile el puerto (frontend: 3000, backend: 8001).
 
-**Contexto de la última sesión (2026-03-18):** Sprint 5.5 completo (Etapas 1+2). Etapa 3 (Alembic) ⏸ diferida. Sprint 6a planificado: Identity Evolution via chat — 2-stage approach (IF/Haiku + WHAT/Sonnet), rollback endpoint, animación en character sheet. Session snapshot + import deferred a 6b. Ver `SPRINT6A.md` para el plan completo.
+**Contexto de la última sesión (2026-03-19):** Sprint 6a ✅ COMPLETADO. Identity Evolution via chat funciona end-to-end: detect (Haiku) → compute (Sonnet) → apply → SSE events → character sheet animado → banner Undo 30s → rollback endpoint. Ver `SPRINT6A.md` para el diseño completo. Próximo: Sprint 6b — Session snapshot + Writer initialization flow.
 
 **Estado real del código (post Etapa 1 — leer si vas a trabajar en backend/infra):**
 - `backend/config.py` — existe. `pydantic-settings`, lee `DATABASE_URL`, `JWT_SECRET_KEY`, `CORS_ORIGINS`, `ANTHROPIC_API_KEY`, `ENVIRONMENT`. Property `is_production`.
@@ -56,12 +56,18 @@ Ser honesto, no performativo. Si los docs son suficientes, decirlo. Si no, decir
 - `Dockerfile` — 4 stages: `dev-backend`, `dev-frontend`, `frontend-builder`, `production`. CMD en shell form para `$PORT`.
 - `docker-compose.yml` — local dev. Backend en :8001 con hot reload, frontend en :3000 con HMR.
 - `railway.toml` — `builder = "DOCKERFILE"`, healthcheck `/health` timeout 120s, sin startCommand.
-- Tests existentes: `backend/tests/test_chat_stream.py`, `backend/tests/test_studio.py`, `frontend/src/components/ConfigPanel.test.tsx`.
+- Tests existentes: `backend/tests/test_chat_stream.py`, `backend/tests/test_studio.py`, `backend/tests/test_evolution_service.py`, `frontend/src/components/ConfigPanel.test.tsx`.
 
 **Learnings de subagentes (para próximos sprints con worktrees):**
 - Los agentes en worktrees NO heredan `.claude/settings.json` — copiar o crear el archivo en el worktree antes de lanzar el agente, o agregar las permissions al guidance note
 - CSS imports son siempre relativos a `src/`, no al componente: `../session.css` desde components/, `../writing.css` desde pages/
 - Aunque se commitee un contrato de tipos a main, los agentes pueden usar field names distintos — revisar el contrato explícitamente en el guidance note del agente y hacer code review agresivo antes de mergear
+
+**Learnings de Sprint 6a (LLM y frontend):**
+- **Markdown code fences en responses de LLM:** Haiku (y a veces Sonnet) envuelven JSON en ` ```json\n{...}\n``` `. Si hacés `json.loads()` directamente, el parse falla y el `except` lo traga silenciosamente. Siempre usar `_parse_json_response()` que hace strip de fences antes de parsear.
+- **`loadIdentity()` vs silent fetch:** `loadIdentity()` setea `loading=true` que renderiza el skeleton y reemplaza el panel entero — incluido el Undo banner. Si necesitás refrescar identidad sin interrumpir la UI, usar `api.getIdentity().then(setIdentity)` directamente.
+- **`.claude/settings.json` debe estar en git:** Permite que los permisos sean consistentes entre sesiones. El gitignore correcto es ignorar solo `settings.local.json` y `todos.json`, no el directorio entero.
+- **Timeout en evolución:** wrap `run_evolution()` con `asyncio.wait_for(timeout=45)` — sin eso, un LLM call colgado bloquea el stream indefinidamente.
 
 ---
 
@@ -132,12 +138,12 @@ Ver los templates de agentes — son la fuente de verdad para patrones de área:
 - Sprint 3 ✅ ConfigPanel editable con animaciones de diff
 - Sprint 4 ✅ Rediseño visual del ConfigPanel — character sheet de RPG. Barras de progreso, badges, constraint cards.
 - Sprint 5 ✅ Writing Experience — Artist Profile hero + Studio separado. Transición animada. Brief Setup, web search real, artefacto como documento, loop de iteración, discografía. WriterPage scroll layout con RPG stats strip.
-- **Sprint 5.5 🔄 (activo):**
+- **Sprint 5.5 ✅:**
   - Etapa 1 ✅ — App deployada en Railway (`https://yourwriter-production.up.railway.app`). Docker Compose local. PostgreSQL en prod, SQLite local.
   - Etapa 2 ✅ — CI/CD: GitHub Actions (tests en PRs, Claude review en PRs a main), branch protection
-  - Etapa 3 (next) — Alembic migrations
-- Sprint 6a: Identity Evolution — evolución autónoma post-sesión, memoria imperfecta, character sheet animado
-- Sprint 6b: Writer Initialization Flow — creación con descripción libre ("quiero un escritor tipo GRRM")
+  - Etapa 3 ⏸ — Alembic migrations (diferida a cuando haya usuarios reales en prod)
+- Sprint 6a ✅ Identity Evolution via Chat — 2-stage pipeline, character sheet animado, rollback endpoint
+- **Sprint 6b (próximo):** Session snapshot + import post-sesión + Writer initialization flow ("quiero un escritor tipo GRRM")
 - Sprint 7: Memory System — memoria episódica persistente
 - Sprint 8: UX/UI dedicado + Polish — momento natural después de 6b cuando el ciclo completo funciona (crear → sesión → evolución). Incluye Agent Visualization. Antes de este sprint: grooming de UX desde la experiencia, no desde los features.
 
