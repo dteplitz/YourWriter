@@ -49,7 +49,10 @@ async def detect_node(state: dict[str, Any]) -> dict[str, Any]:
     )
 
     llm = ChatAnthropic(model="claude-haiku-4-5-20251001")  # type: ignore[call-arg]
-    messages = [SystemMessage(content=prompt)]
+    messages = [
+        SystemMessage(content=prompt),
+        HumanMessage(content="Analyze the conversation and respond with the JSON object."),
+    ]
 
     try:
         response = await llm.ainvoke(messages)
@@ -60,7 +63,7 @@ async def detect_node(state: dict[str, Any]) -> dict[str, Any]:
             "confidence": float(result.get("confidence", 0.0)),
             "signal": str(result.get("signal", "")),
         }
-    except (json.JSONDecodeError, AttributeError, ValueError, TypeError):
+    except Exception:
         # Conservative default: do not evolve on any failure
         return {
             "should_evolve": False,
@@ -104,7 +107,7 @@ async def compute_node(state: dict[str, Any]) -> dict[str, Any]:
             "changes": result.get("changes", []),
             "reasoning": result.get("overall_reasoning", ""),
         }
-    except (json.JSONDecodeError, AttributeError, ValueError, TypeError):
+    except Exception:
         return {
             "changes": [],
             "reasoning": "parse error",
