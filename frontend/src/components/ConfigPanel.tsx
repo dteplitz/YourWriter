@@ -182,7 +182,7 @@ export default function ConfigPanel({
     return () => clearTimeout(timer);
   }, [versionBump]);
 
-  // React to incoming pendingEvolution: animate diff and show undo banner for 30s
+  // React to incoming pendingEvolution: animate diff, reload identity, show undo banner for 30s
   useEffect(() => {
     if (!pendingEvolution || !identity) return;
 
@@ -197,6 +197,13 @@ export default function ConfigPanel({
     }
     setChangedKeys(changed);
     setVersionBump(true);
+
+    // Silently refresh identity so the panel shows evolved values (v2, new emotions, etc.)
+    // Do NOT call loadIdentity() — that sets loading=true which would hide the Undo banner.
+    api.getIdentity(writerId).then((data) => {
+      setIdentity(data);
+      onIdentityLoaded?.(data);
+    }).catch(() => {});
 
     // Show undo banner, auto-dismiss after 30s
     setShowUndoBanner(true);
