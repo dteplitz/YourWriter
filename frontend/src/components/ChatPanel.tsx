@@ -54,7 +54,9 @@ export default function ChatPanel({ writerId, onEnterStudio, onEvolution }: Chat
 
     try {
       let accumulated = '';
-      const { messageId } = await api.sendMessageStream(
+      // sendMessageStream keeps the SSE open after `done` waiting for evolution_detected.
+      // onDone re-enables the UI immediately when `done` arrives — before evolution completes.
+      await api.sendMessageStream(
         writerId,
         userMessage.content,
         (token) => {
@@ -66,18 +68,19 @@ export default function ChatPanel({ writerId, onEnterStudio, onEvolution }: Chat
           setCurrentPhase(phase);
         },
         onEvolution,
+        (messageId) => {
+          setLoading(false);
+          setCurrentPhase(null);
+          setMessages((prev) => [...prev, {
+            id: messageId,
+            writer_id: writerId,
+            role: 'assistant',
+            content: accumulated,
+            created_at: new Date().toISOString(),
+          }]);
+          setStreamingContent('');
+        },
       );
-
-      // Replace streaming placeholder with the final persisted message
-      const finalMessage: ChatMessage = {
-        id: messageId,
-        writer_id: writerId,
-        role: 'assistant',
-        content: accumulated,
-        created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, finalMessage]);
-      setStreamingContent('');
     } catch (err) {
       setStreamingContent('');
       const errorMsg: ChatMessage = {

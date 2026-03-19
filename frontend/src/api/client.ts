@@ -102,6 +102,7 @@ export async function sendMessageStream(
   onToken: (token: string) => void,
   onPhase?: (phase: string) => void,
   onEvolution?: (event: EvolutionDetectedEvent) => void,
+  onDone?: (messageId: number) => void,
 ): Promise<{ messageId: number }> {
   const token = localStorage.getItem('token');
   const headers: Record<string, string> = {
@@ -153,6 +154,7 @@ export async function sendMessageStream(
       }
       if (data.done) {
         messageId = data.message_id;
+        if (onDone) onDone(data.message_id);
         // Do NOT break — server may still send evolution_detected events.
       }
       if (data.evolution_detected && onEvolution) {
