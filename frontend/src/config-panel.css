@@ -1,5 +1,57 @@
 /* ===== Character Sheet — Config Panel ===== */
 
+/* Evolution undo banner — appears after auto-evolution, dismisses after 30s */
+.config-evolution-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  background: rgba(124, 111, 247, 0.12);
+  border: 1px solid rgba(124, 111, 247, 0.3);
+  border-radius: var(--radius);
+  animation: banner-fade-in 0.3s ease-out;
+}
+
+@keyframes banner-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.config-evolution-banner-text {
+  font-size: 0.8rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.config-evolution-undo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.6rem;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background-color 0.15s;
+  flex-shrink: 0;
+}
+
+.config-evolution-undo-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.config-evolution-undo-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
 /* Section separator line */
 .config-section + .config-section {
   border-top: 1px solid var(--border);

@@ -15,6 +15,20 @@ El producto tiene dos espacios conceptuales (ambos construidos desde Sprint 5):
 
 ---
 
+## Modelo de identidad (tres capas)
+
+Definido en Sprint 6a planning. Guía cualquier decisión sobre la identidad del writer:
+
+| Capa | Qué es | Cómo evoluciona | Dónde vive |
+|------|--------|----------------|-----------|
+| **General stats** | Quién ES el writer | A través del chat — el usuario moldea conversando | `WriterIdentity` (versionado) |
+| **Session config** | Cómo encarará ESTA pieza | El usuario particulariza en el Studio (brief, iterations) | Fork del general, no persiste en general |
+| **Post-sesión** | Qué queda de la sesión | El usuario decide qué importar al general | Memories o import explícito |
+
+"Escribí esto en tono oscuro" → session config. "Quiero que seas más oscuro" → general stats.
+
+---
+
 ## Lo que existe hoy (post-Sprint 5)
 
 ### Autenticación
@@ -80,11 +94,12 @@ El Studio usa `web_search_20250305` (herramienta built-in de Anthropic SDK ≥0.
 
 | Feature | Sprint |
 |---------|--------|
-| Evolución autónoma post-sesión | Sprint 6a |
-| Alembic migrations | Sprint 5.5 Etapa 3 (antes de 6a) |
-| Writer initialization flow (GRRM-style) | Sprint 6b |
+| Evolución de identidad via chat (2-stage: detect + compute) | Sprint 6a |
 | Animación del character sheet al evolucionar | Sprint 6a |
-| Evolución autónoma post-sesión | Sprint 6a |
+| Rollback de identidad (deshacer evolución) | Sprint 6a |
+| Session snapshot + import post-sesión | Sprint 6b |
+| Writer initialization flow (GRRM-style) | Sprint 6b |
+| Alembic migrations | Sprint 5.5 Etapa 3 ⏸ (cuando haya usuarios reales en prod) |
 | Memory System (memoria episódica persistente) | Sprint 7 |
 | Polish + Agent Visualization | Sprint 8 |
 

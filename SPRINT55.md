@@ -145,7 +145,9 @@ Objetivo: tests corren automáticamente en cada PR, Claude revisa diffs antes de
 
 ---
 
-### Etapa 3 — Migración de DB
+### Etapa 3 — Migración de DB ⏸ DIFERIDA
+
+**Cuándo:** cuando haya usuarios reales en producción con datos que no podemos borrar. No antes.
 
 Objetivo: pasar de `create_all` a migraciones versionadas con Alembic.
 
