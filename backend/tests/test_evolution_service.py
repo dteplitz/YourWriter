@@ -98,7 +98,7 @@ async def test_run_evolution_returns_result_when_should_evolve_true():
         "emotions": {"melancholy": 0.5},
     }
 
-    with patch("backend.services.evolution_service.evolution_graph") as mock_graph:
+    with patch("agents.graphs.evolution_graph.evolution_graph") as mock_graph:
         mock_graph.ainvoke = AsyncMock(return_value={
             "should_evolve": True,
             "confidence": 0.9,
@@ -151,7 +151,7 @@ async def test_run_evolution_returns_none_when_should_evolve_false():
         "lifelong_objectives": [],
     }
 
-    with patch("backend.services.evolution_service.evolution_graph") as mock_graph:
+    with patch("agents.graphs.evolution_graph.evolution_graph") as mock_graph:
         mock_graph.ainvoke = AsyncMock(return_value={
             "should_evolve": False,
             "confidence": 0.1,
