@@ -61,6 +61,7 @@ export default function SessionExperience({
     setCurrentPhase(null);
     setActiveToolUse(null);
     setError(null);
+    setTipIndex(0);
 
     const briefWithNotes = notes
       ? { ...brief, notes: notes }

@@ -71,7 +71,6 @@ export default function StudioPage() {
       {step === 'brief' && (
         <BriefSetup
           writer={writer}
-          writerId={writerId}
           onStartSession={handleStartSession}
           onBack={() => navigate('/writer/' + writerId)}
         />

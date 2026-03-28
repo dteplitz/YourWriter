@@ -6,12 +6,11 @@ type BriefState = 'input' | 'loading' | 'preview' | 'clarifying';
 
 interface BriefSetupProps {
   writer: Writer;
-  writerId: string;
   onStartSession: (brief: Brief) => void;
   onBack: () => void;
 }
 
-export default function BriefSetup({ writer, writerId, onStartSession, onBack }: BriefSetupProps) {
+export default function BriefSetup({ writer, onStartSession, onBack }: BriefSetupProps) {
   const [briefState, setBriefState] = useState<BriefState>('input');
   const [message, setMessage] = useState('');
   const [clarificationAnswer, setClarificationAnswer] = useState('');
@@ -23,7 +22,7 @@ export default function BriefSetup({ writer, writerId, onStartSession, onBack }:
     setError(null);
     setBriefState('loading');
     try {
-      const result = await api.sendBrief(writerId, text.trim());
+      const result = await api.sendBrief(writer.id, text.trim());
       setBrief(result);
       setBriefState(result.needs_clarification ? 'clarifying' : 'preview');
     } catch (err) {

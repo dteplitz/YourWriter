@@ -13,7 +13,6 @@ export default function ChatPanel({ writerId, onEnterStudio, onEvolution }: Chat
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
-  const [currentPhase, setCurrentPhase] = useState<string | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,7 +52,6 @@ export default function ChatPanel({ writerId, onEnterStudio, onEvolution }: Chat
     setLoading(true);
 
     setStreamingContent('');
-    setCurrentPhase(null);
 
     try {
       let accumulated = '';
@@ -65,15 +63,11 @@ export default function ChatPanel({ writerId, onEnterStudio, onEvolution }: Chat
         (token) => {
           accumulated += token;
           setStreamingContent(accumulated);
-          setCurrentPhase(null);
         },
-        (phase) => {
-          setCurrentPhase(phase);
-        },
+        undefined,
         onEvolution,
         (messageId) => {
           setLoading(false);
-          setCurrentPhase(null);
           setMessages((prev) => [...prev, {
             id: messageId,
             writer_id: writerId,
@@ -96,7 +90,6 @@ export default function ChatPanel({ writerId, onEnterStudio, onEvolution }: Chat
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setLoading(false);
-      setCurrentPhase(null);
     }
   };
 
