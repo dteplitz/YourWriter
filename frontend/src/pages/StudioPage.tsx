@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import type { Brief, Piece, Writer } from '../types';
+import type { Brief, Writer } from '../types';
 import * as api from '../api/client';
 import BriefSetup from '../components/BriefSetup';
 import SessionExperience from '../components/SessionExperience';
@@ -15,7 +15,6 @@ export default function StudioPage() {
   const [writer, setWriter] = useState<Writer | null>(null);
   const [step, setStep] = useState<StudioStep>('brief');
   const [brief, setBrief] = useState<Brief | null>(null);
-  const [pieces, setPieces] = useState<Piece[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,12 +28,8 @@ export default function StudioPage() {
   const loadData = async (id: string) => {
     setLoading(true);
     try {
-      const [writerData, piecesData] = await Promise.all([
-        api.getWriter(id),
-        api.getPieces(id).catch(() => [] as Piece[]),
-      ]);
+      const writerData = await api.getWriter(id);
       setWriter(writerData);
-      setPieces(piecesData);
     } catch {
       navigate('/');
     } finally {
@@ -80,7 +75,7 @@ export default function StudioPage() {
         <SessionExperience
           writerId={writerId}
           brief={brief}
-          onPieceSaved={(piece) => setPieces((prev) => [piece, ...prev])}
+          onPieceSaved={() => {}}
           onSessionEnd={() => setStep('brief')}
         />
       )}
