@@ -406,6 +406,7 @@ a {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-anchor: none;
   display: flex;
   flex-direction: column;
 }
