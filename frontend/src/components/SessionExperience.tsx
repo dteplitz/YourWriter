@@ -88,7 +88,7 @@ export default function SessionExperience({
         (piece) => {
           pieceReceivedRef.current = true;
           setCurrentPiece(piece);
-          onPieceSaved(piece);
+          onPieceSaved?.(piece);
           setSessionState('artifact');
         },
       );
