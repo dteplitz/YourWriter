@@ -75,7 +75,7 @@ export default function StudioPage() {
         <SessionExperience
           writerId={writerId}
           brief={brief}
-          onPieceSaved={() => {}}
+
           onSessionEnd={() => setStep('brief')}
         />
       )}

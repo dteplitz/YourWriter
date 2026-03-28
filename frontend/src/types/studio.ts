@@ -32,6 +32,6 @@ export interface ToolResultEvent {
 export interface SessionExperienceProps {
   writerId: string;
   brief: Brief;
-  onPieceSaved: (piece: Piece) => void;
+  onPieceSaved?: (piece: Piece) => void;
   onSessionEnd: () => void;
 }
