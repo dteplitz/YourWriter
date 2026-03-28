@@ -1,16 +1,17 @@
 import { useState } from 'react';
-import type { Brief } from '../types';
+import type { Brief, Writer } from '../types';
 import * as api from '../api/client';
 
 type BriefState = 'input' | 'loading' | 'preview' | 'clarifying';
 
 interface BriefSetupProps {
+  writer: Writer;
   writerId: string;
   onStartSession: (brief: Brief) => void;
   onBack: () => void;
 }
 
-export default function BriefSetup({ writerId, onStartSession, onBack }: BriefSetupProps) {
+export default function BriefSetup({ writer, writerId, onStartSession, onBack }: BriefSetupProps) {
   const [briefState, setBriefState] = useState<BriefState>('input');
   const [message, setMessage] = useState('');
   const [clarificationAnswer, setClarificationAnswer] = useState('');
@@ -140,6 +141,12 @@ export default function BriefSetup({ writerId, onStartSession, onBack }: BriefSe
   return (
     <div className="brief-setup">
       <div className="brief-setup-inner">
+        <div className="brief-writer-header">
+          <span className="brief-writer-name">{writer.name}</span>
+          {writer.purpose && (
+            <span className="brief-writer-purpose">{writer.purpose}</span>
+          )}
+        </div>
         <h2 className="brief-setup-title">¿Qué grabamos hoy?</h2>
         {error && (
           <p style={{ color: 'var(--danger)', fontSize: '0.85rem', marginBottom: '0.75rem' }}>

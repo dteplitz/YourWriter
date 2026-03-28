@@ -2,19 +2,18 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Brief, Piece, Writer } from '../types';
 import * as api from '../api/client';
-import StudioTransition from '../components/StudioTransition';
 import BriefSetup from '../components/BriefSetup';
 import SessionExperience from '../components/SessionExperience';
 import '../writing.css';
 
-type StudioStep = 'transition' | 'brief' | 'session';
+type StudioStep = 'brief' | 'session';
 
 export default function StudioPage() {
   const { writerId } = useParams<{ writerId: string }>();
   const navigate = useNavigate();
 
   const [writer, setWriter] = useState<Writer | null>(null);
-  const [step, setStep] = useState<StudioStep>('transition');
+  const [step, setStep] = useState<StudioStep>('brief');
   const [brief, setBrief] = useState<Brief | null>(null);
   const [pieces, setPieces] = useState<Piece[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,8 +47,6 @@ export default function StudioPage() {
     setStep('session');
   };
 
-  const recentPiece = pieces.length > 0 ? pieces[pieces.length - 1] : undefined;
-
   if (loading || !writer || !writerId) {
     return (
       <div className="studio-page">
@@ -71,19 +68,12 @@ export default function StudioPage() {
         <div style={{ minWidth: '120px' }} />
       </nav>
 
-      {step === 'transition' && (
-        <StudioTransition
-          writer={writer}
-          recentPiece={recentPiece}
-          onEnter={() => setStep('brief')}
-        />
-      )}
-
       {step === 'brief' && (
         <BriefSetup
+          writer={writer}
           writerId={writerId}
           onStartSession={handleStartSession}
-          onBack={() => setStep('transition')}
+          onBack={() => navigate('/writer/' + writerId)}
         />
       )}
 
@@ -92,7 +82,7 @@ export default function StudioPage() {
           writerId={writerId}
           brief={brief}
           onPieceSaved={(piece) => setPieces((prev) => [piece, ...prev])}
-          onSessionEnd={() => setStep('transition')}
+          onSessionEnd={() => setStep('brief')}
         />
       )}
     </div>

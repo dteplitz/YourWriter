@@ -11,7 +11,7 @@ from typing import Any
 
 import anthropic
 
-from agents.prompts.system import CHAT_SYSTEM_PROMPT
+from agents.prompts.system import ARTIST_PROFILE_CHAT_SYSTEM_PROMPT
 from agents.tools.memory import get_memories_as_prompt
 from agents.tools.constraints import format_constraints_for_prompt
 
@@ -20,7 +20,7 @@ def _build_system_prompt(state: dict[str, Any]) -> str:
     """Assemble the chat system prompt from writer state."""
     identity: dict[str, Any] = state.get("identity", {})
 
-    return CHAT_SYSTEM_PROMPT.format(
+    return ARTIST_PROFILE_CHAT_SYSTEM_PROMPT.format(
         name=state.get("writer_name", "Writer"),
         purpose=identity.get("purpose", "general-purpose writing"),
         personality=", ".join(identity.get("personality", ["thoughtful"])),
