@@ -64,7 +64,7 @@ export default function ChatPanel({ writerId, onEnterStudio, onEvolution }: Chat
           accumulated += token;
           setStreamingContent(accumulated);
         },
-        undefined,
+        () => {},
         onEvolution,
         (messageId) => {
           setLoading(false);
