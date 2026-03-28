@@ -23,7 +23,6 @@ export default function WriterPage() {
       navigate('/');
       return;
     }
-    if (pageRef.current) pageRef.current.scrollTop = 0;
     loadWriter(id);
     return () => {
       selectWriter(null);
@@ -31,9 +30,12 @@ export default function WriterPage() {
   }, [id]);
 
   // Watch when the config hero scrolls out of view (scroll-event based, more predictable)
+  // Also resets scroll to top when the writer-page div first mounts (loading → false).
+  // The ref is null during loading state, so we reset here where pageRef is guaranteed valid.
   useEffect(() => {
     const page = pageRef.current;
     if (!page) return;
+    page.scrollTop = 0;
     const check = () => {
       const hero = heroRef.current;
       if (!hero) return;
