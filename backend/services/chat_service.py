@@ -58,15 +58,17 @@ async def invoke_writer_agent(
     writer: Writer,
     user_message: str,
 ) -> str:
-    """Invoke the writer agent graph and return the assistant response text.
+    """Invoke the writer agent in conversational (Artist Profile) mode.
+
+    Always uses the chat path — the writing pipeline is never triggered
+    from the Artist Profile chat.
 
     Raises RuntimeError if ANTHROPIC_API_KEY is not set.
     """
     if not os.getenv("ANTHROPIC_API_KEY"):
         raise RuntimeError("ANTHROPIC_API_KEY environment variable is not set")
 
-    # Lazy import to avoid loading the agent layer at module import time
-    from agents.graphs.writer_graph import writer_graph
+    from agents.nodes.chat_node import chat_node  # noqa: E402
 
     # Load latest identity
     identity_row: WriterIdentity | None = None
@@ -97,8 +99,8 @@ async def invoke_writer_agent(
         "constraints": identity_dict.get("constraints", {}),
     }
 
-    # Invoke the graph
-    result = await writer_graph.ainvoke(state)
+    # Always conversational — no intent detection, no writing pipeline
+    result = await chat_node(state)
 
     # Extract the last assistant message
     result_messages = result.get("messages", [])
@@ -113,25 +115,21 @@ async def stream_writer_agent(
     writer: Writer,
     user_message: str,
 ) -> AsyncIterator[str | dict]:
-    """Stream the writer agent response as text chunks or phase events.
+    """Stream the writer agent response as text chunks (Artist Profile chat).
+
+    Always uses the conversational path — the writing pipeline is never
+    triggered from the Artist Profile chat.
 
     Manages its own short-lived DB session for loading history so the
     caller does not need to hold a connection open during the LLM call.
 
     Yields:
       - str: text token for the client to display
-      - dict: phase event like {"phase": "outlining"}
     """
     if not os.getenv("ANTHROPIC_API_KEY"):
         raise RuntimeError("ANTHROPIC_API_KEY environment variable is not set")
 
-    from agents.graphs.writer_graph import detect_intent_node  # noqa: E402
     from agents.nodes.chat_node import chat_node_stream  # noqa: E402
-    from agents.nodes.writing_nodes import (  # noqa: E402
-        outline_node,
-        draft_node,
-        refine_node_stream,
-    )
     from backend.db.database import async_session  # noqa: E402
 
     # Load latest identity
@@ -162,26 +160,9 @@ async def stream_writer_agent(
         "constraints": identity_dict.get("constraints", {}),
     }
 
-    # Detect intent
-    intent_result = await detect_intent_node(state)
-    mode = intent_result.get("mode", "chat")
-
-    if mode == "chat":
-        async for chunk in chat_node_stream(state):
-            yield chunk
-    else:
-        # Write mode: outline → draft → stream refine
-        yield {"phase": "outlining"}
-        outline_result = await outline_node(state)
-        state.update(outline_result)
-
-        yield {"phase": "drafting"}
-        draft_result = await draft_node(state)
-        state.update(draft_result)
-
-        yield {"phase": "refining"}
-        async for chunk in refine_node_stream(state):
-            yield chunk
+    # Always conversational — no intent detection, stream directly
+    async for chunk in chat_node_stream(state):
+        yield chunk
 
 
 async def generate_brief(writer: Writer, message: str) -> BriefResponse:

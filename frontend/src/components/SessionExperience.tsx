@@ -13,6 +13,15 @@ const phaseLabels: Record<string, string> = {
   refining: 'Mezclando...',
 };
 
+const LOADING_TIPS = [
+  'El Studio pasa por research, estructura, borrador y refinado antes de darte la pieza.',
+  'Mientras esperás, pensá en las notas del productor que vas a dejar para el próximo take.',
+  'El Artist Profile es donde moldeás al writer. El Studio es donde escribe.',
+  'Podés iterar tantas veces como quieras — cada take mantiene el contexto del anterior.',
+  'Los cambios que pedís en el chat del Artist Profile moldean la identidad del writer con el tiempo.',
+  'La discografía guarda todas las piezas del writer. Podés revisarlas entre sesiones.',
+];
+
 export default function SessionExperience({
   writerId,
   brief,
@@ -25,6 +34,7 @@ export default function SessionExperience({
   const [activeToolUse, setActiveToolUse] = useState<ToolUseEvent | null>(null);
   const [currentPiece, setCurrentPiece] = useState<Piece | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tipIndex, setTipIndex] = useState(0);
   const streamedTextRef = useRef('');
   const hasLaunchedRef = useRef(false);
   const pieceReceivedRef = useRef(false);
@@ -35,6 +45,14 @@ export default function SessionExperience({
     launchStream(brief.notes);
   }, []);
 
+  useEffect(() => {
+    if (streamedText) return;
+    const interval = setInterval(() => {
+      setTipIndex((i) => (i + 1) % LOADING_TIPS.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [streamedText]);
+
   const launchStream = async (notes?: string) => {
     setSessionState('streaming');
     setStreamedText('');
@@ -43,6 +61,7 @@ export default function SessionExperience({
     setCurrentPhase(null);
     setActiveToolUse(null);
     setError(null);
+    setTipIndex(0);
 
     const briefWithNotes = notes
       ? { ...brief, notes: notes }
@@ -124,11 +143,16 @@ export default function SessionExperience({
           {streamedText ? (
             <div className="session-stream-text">{streamedText}</div>
           ) : (
-            !phaseLabel && !activeToolUse && (
-              <div className="session-stream-text session-stream-text--waiting">
-                Preparando el take...
+            <>
+              {!phaseLabel && !activeToolUse && (
+                <div className="session-stream-text session-stream-text--waiting">
+                  Preparando el take...
+                </div>
+              )}
+              <div className="session-loading-tip">
+                {LOADING_TIPS[tipIndex]}
               </div>
-            )
+            </>
           )}
         </div>
       )}

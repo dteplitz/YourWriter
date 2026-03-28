@@ -13,15 +13,17 @@ export default function ChatPanel({ writerId, onEnterStudio, onEvolution }: Chat
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
-  const [currentPhase, setCurrentPhase] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadHistory();
   }, [writerId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [messages, streamingContent]);
 
   const loadHistory = async () => {
@@ -50,7 +52,6 @@ export default function ChatPanel({ writerId, onEnterStudio, onEvolution }: Chat
     setLoading(true);
 
     setStreamingContent('');
-    setCurrentPhase(null);
 
     try {
       let accumulated = '';
@@ -62,15 +63,11 @@ export default function ChatPanel({ writerId, onEnterStudio, onEvolution }: Chat
         (token) => {
           accumulated += token;
           setStreamingContent(accumulated);
-          setCurrentPhase(null);
         },
-        (phase) => {
-          setCurrentPhase(phase);
-        },
+        undefined,
         onEvolution,
         (messageId) => {
           setLoading(false);
-          setCurrentPhase(null);
           setMessages((prev) => [...prev, {
             id: messageId,
             writer_id: writerId,
@@ -93,7 +90,6 @@ export default function ChatPanel({ writerId, onEnterStudio, onEvolution }: Chat
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setLoading(false);
-      setCurrentPhase(null);
     }
   };
 
@@ -117,7 +113,7 @@ export default function ChatPanel({ writerId, onEnterStudio, onEvolution }: Chat
           </button>
         )}
       </div>
-      <div className="chat-messages">
+      <div className="chat-messages" ref={messagesContainerRef}>
         {messages.length === 0 && (
           <div className="chat-empty">
             Start a conversation with your writer...
@@ -136,17 +132,11 @@ export default function ChatPanel({ writerId, onEnterStudio, onEvolution }: Chat
             <div className="chat-message-role">Writer</div>
             <div className="chat-message-content">
               {streamingContent || (
-                <span className="chat-typing">
-                  {currentPhase === 'outlining' && 'Planning the outline...'}
-                  {currentPhase === 'drafting' && 'Writing the first draft...'}
-                  {currentPhase === 'refining' && 'Polishing the final version...'}
-                  {!currentPhase && 'Thinking...'}
-                </span>
+                <span className="chat-typing">Thinking...</span>
               )}
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
       <div className="chat-input-area">
         <textarea
