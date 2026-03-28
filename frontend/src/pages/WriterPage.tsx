@@ -23,6 +23,7 @@ export default function WriterPage() {
       navigate('/');
       return;
     }
+    if (pageRef.current) pageRef.current.scrollTop = 0;
     loadWriter(id);
     return () => {
       selectWriter(null);
