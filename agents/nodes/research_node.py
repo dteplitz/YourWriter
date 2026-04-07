@@ -5,6 +5,9 @@ examines the user's request, asks Claude whether current / factual
 information would improve the response, and — if so — executes a web
 search via Anthropic's built-in ``web_search_20250305`` tool.
 
+The model is invoked through ``ChatAnthropic`` with the built-in tool
+spec bound via ``bind_tools(...)`` — no direct anthropic SDK calls.
+
 The search is transparent to the user: the node yields SSE-compatible
 event dicts so the frontend can show a "Buscando…" pill while the
 search is in progress.
@@ -35,9 +38,18 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
-import anthropic
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import HumanMessage, SystemMessage
 
-from agents.tools.registry import TOOL_REGISTRY, get_anthropic_tools
+from backend.config import settings
+
+# Anthropic native built-in tool spec for web search.  langchain-anthropic
+# passes raw tool dicts through ``bind_tools(...)`` for built-ins.
+_WEB_SEARCH_TOOL_SPEC: dict[str, str] = {
+    "type": "web_search_20250305",
+    "name": "web_search",
+}
+_WEB_SEARCH_DISPLAY_NAME = "Buscando"
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -68,6 +80,9 @@ directly useful — do not pad.
 If no search is needed, reply with exactly: NO_SEARCH_NEEDED
 """
 
+_MAX_TOKENS = 2048
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -80,6 +95,20 @@ def _extract_user_request(state: dict[str, Any]) -> str:
         if msg.get("role") == "user":
             return msg.get("content", "")
     return ""
+
+
+def _block_type(block: Any) -> str:
+    """Return the ``type`` of a content block, supporting both dict and object shapes."""
+    if isinstance(block, dict):
+        return block.get("type", "")
+    return getattr(block, "type", "")
+
+
+def _block_field(block: Any, name: str, default: Any = None) -> Any:
+    """Read a field from a content block tolerating dict or object access."""
+    if isinstance(block, dict):
+        return block.get(name, default)
+    return getattr(block, name, default)
 
 
 # ---------------------------------------------------------------------------
@@ -108,35 +137,50 @@ async def research_node_stream(state: dict[str, Any]) -> AsyncIterator[dict[str,
         yield {"search_results": ""}
         return
 
-    client = anthropic.AsyncAnthropic()
+    llm = ChatAnthropic(  # type: ignore[call-arg]
+        model=settings.writing_model,
+        max_tokens=_MAX_TOKENS,
+    )
+    # web_search_20250305 is a native Anthropic built-in tool. langchain-anthropic
+    # passes raw tool dicts through bind_tools(...) for built-ins.
+    llm_with_tools = llm.bind_tools([_WEB_SEARCH_TOOL_SPEC])
 
-    response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2048,
-        system=RESEARCH_SYSTEM,
-        tools=get_anthropic_tools(["web_search"]),
-        messages=[{"role": "user", "content": user_request}],
+    response = await llm_with_tools.ainvoke(
+        [
+            SystemMessage(content=RESEARCH_SYSTEM),
+            HumanMessage(content=user_request),
+        ]
     )
 
     # Walk the response content blocks and process tool_use / text blocks.
+    # Anthropic server-side built-in tools (web_search_20250305) emit
+    # ``server_tool_use`` and ``web_search_tool_result`` blocks, and the
+    # final synthesis is split across multiple ``text`` blocks (some with
+    # citations).  We join all text blocks into a single summary.
     search_query: str | None = None
-    search_summary: str = ""
+    text_parts: list[str] = []
 
-    for block in response.content:
-        if block.type == "tool_use":
-            search_query = block.input.get("query", "") if isinstance(block.input, dict) else ""
-            tool = TOOL_REGISTRY.get("web_search")
+    content = response.content if isinstance(response.content, list) else [response.content]
+
+    for block in content:
+        btype = _block_type(block)
+        if btype in ("server_tool_use", "tool_use"):
+            tool_input = _block_field(block, "input", {}) or {}
+            search_query = tool_input.get("query", "") if isinstance(tool_input, dict) else ""
             yield {
                 "tool_use": {
                     "name": "web_search",
-                    "display_name": tool.display_name if tool else "Buscando",
+                    "display_name": _WEB_SEARCH_DISPLAY_NAME,
                     "query": search_query,
                 }
             }
-        elif block.type == "text":
-            text = block.text.strip()
-            if text and text != "NO_SEARCH_NEEDED":
-                search_summary = text
+        elif btype == "text":
+            text_value = _block_field(block, "text", "")
+            if text_value:
+                text_parts.append(text_value)
+
+    joined = "".join(text_parts).strip()
+    search_summary = "" if joined == "NO_SEARCH_NEEDED" else joined
 
     if search_query is not None:
         # Emit a tool_result event with a capped summary for the SSE pill.

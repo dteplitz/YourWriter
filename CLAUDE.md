@@ -19,6 +19,7 @@
 | Estado técnico del producto | `ARCHITECTURE.md` |
 | Razonamiento de diseño | `LINEAGE.md` |
 | Terminología canónica del producto | `GLOSSARY.md` |
+| Decisiones, patterns y watch list del ecosistema Lang | `LANG_PLAYBOOK.md` |
 
 **En el retro:** si aprendemos algo sobre la relación o el proceso → actualizar `~/.claude/CLAUDE.md`. Si aprendemos algo sobre YourWriter → actualizar este archivo o los docs vivos.
 
@@ -31,9 +32,10 @@ No recordás nada de lo anterior sobre este proyecto. El contexto de quién es D
 **Leer al inicio de cada sesión (antes de proponer nada):**
 1. `PRODUCT.md` — qué está construido funcionalmente
 2. `ARCHITECTURE.md` — estructura técnica actual
-3. `SPRINT6A.md` — sprint anterior (✅ cerrado) / no hay archivo para Sprint 6b aún *(actualizar esta línea cada sprint)*
-4. `LINEAGE.md` — razonamiento de diseño (siempre relevante)
-5. `GLOSSARY.md` — terminología canónica (leer antes de tomar decisiones de UX o naming)
+3. Sprint Lang Refresh ✅ cerrado (2026-04-07, ver `SPRINT_LANG_REFRESH.md` para el plan original y la sección "Sprint Lang Refresh" de `ARCHITECTURE.md` para el cierre). Sprint 6a ✅ cerrado (`SPRINT6A.md`). Sprint UX ✅ cerrado (retro inline en ARCHITECTURE.md y CLAUDE.md). Próximo: **Sprint 6b** — Session snapshot + Writer initialization. *(actualizar esta línea cada sprint)*
+4. `LANG_PLAYBOOK.md` — referencia viva del ecosistema Lang en YourWriter (decisiones, patterns, watch list). Leer antes de cualquier decisión sobre LangChain/LangGraph/LangMem/deepagents
+5. `LINEAGE.md` — razonamiento de diseño (siempre relevante)
+6. `GLOSSARY.md` — terminología canónica (leer antes de tomar decisiones de UX o naming)
 
 **Diagnóstico al despertar — después de leer, decirle a Damian:**
 - Qué entendés con confianza
@@ -47,7 +49,7 @@ Ser honesto, no performativo. Si los docs son suficientes, decirlo. Si no, decir
 
 **La app la corre Damian** — `bash dev.sh` desde el root (usa Docker Compose, requiere Docker Desktop corriendo). Primera vez ~2 min de build. Para QA pedile el puerto (frontend: 3000, backend: 8001).
 
-**Contexto de la última sesión (2026-03-19):** Sprint 6a ✅ COMPLETADO. Identity Evolution via chat funciona end-to-end: detect (Haiku) → compute (Sonnet) → apply → SSE events → character sheet animado → banner Undo 30s → rollback endpoint. Ver `SPRINT6A.md` para el diseño completo. Próximo: Sprint 6b — Session snapshot + Writer initialization flow.
+**Contexto de la última sesión (2026-04-07):** Sprint Lang Refresh ejecutado y mergeado. 9 commits. Toda la deuda del agent layer saldada: LangChain/LangGraph 1.x, los 4 call sites del SDK directo migrados a `ChatAnthropic`, prompt caching activo en chat, Pydantic structured output en `evolution_nodes` y `generate_brief`, modelos centralizados en config, código muerto borrado. QA con Studio: el research path firó web search correctamente para una query time-sensitive ("Australian Open 2026") tras descubrir que los built-in tools server-side de Anthropic emiten `server_tool_use` y no `tool_use`. Próximo: **Sprint 6b** (Session snapshot + Writer initialization) — ahora con LangGraph 1.x checkpointer/store como base. Roadmap completo: Sprint 6b → 6c (LangSmith + evals) → 7 (LangMem) → 8 (UX/Polish).
 
 **Estado real del código (post Etapa 1 — leer si vas a trabajar en backend/infra):**
 - `backend/config.py` — existe. `pydantic-settings`, lee `DATABASE_URL`, `JWT_SECRET_KEY`, `CORS_ORIGINS`, `ANTHROPIC_API_KEY`, `ENVIRONMENT`. Property `is_production`.
@@ -62,6 +64,13 @@ Ser honesto, no performativo. Si los docs son suficientes, decirlo. Si no, decir
 - Los agentes en worktrees NO heredan `.claude/settings.json` — copiar o crear el archivo en el worktree antes de lanzar el agente, o agregar las permissions al guidance note
 - CSS imports son siempre relativos a `src/`, no al componente: `../session.css` desde components/, `../writing.css` desde pages/
 - Aunque se commitee un contrato de tipos a main, los agentes pueden usar field names distintos — revisar el contrato explícitamente en el guidance note del agente y hacer code review agresivo antes de mergear
+
+**Learnings de Sprint UX (scroll y QA):**
+- **Chrome scroll anchoring:** Cuando un scroll container crece por contenido async (~400ms), Chrome re-scrollea automáticamente — bypasea `scrollTop = 0` completamente (no hay JS calls, es browser-nativo). Fix completo: `overflow-anchor: none` (deshabilita anchoring) + `scrollRestoration: manual` + reset en el effect correcto.
+- **Effect timing con refs:** `pageRef.current` es null mientras `loading=true` (el div no está en el DOM). El reset de scroll debe ir en el effect `[loading]` (fire cuando loading→false), no en el effect `[id]`.
+- **Playwright page.goto() usa caché:** Assets JS/CSS cacheadas hacen que QA muestre comportamiento viejo. Para verificar que están activos los cambios: navegar desde home → click card (no goto directo) → hard reload si es necesario (`location.reload(true)`).
+- **QA local antes de prod:** Siempre hacer QA en localhost primero. Hotfix a prod sin QA local es un error. Si hay bug en prod: fix local → QA local → hotfix PR.
+- **Automated PR reviewer falsos positivos:** El reviewer de GitHub Actions puede flaggear code paths que funcionan correctamente. Siempre verificar en el código antes de actuar en sus sugerencias.
 
 **Learnings de Sprint 6a (LLM y frontend):**
 - **Markdown code fences en responses de LLM:** Haiku (y a veces Sonnet) envuelven JSON en ` ```json\n{...}\n``` `. Si hacés `json.loads()` directamente, el parse falla y el `except` lo traga silenciosamente. Siempre usar `_parse_json_response()` que hace strip de fences antes de parsear.
@@ -124,7 +133,7 @@ Ver los templates de agentes — son la fuente de verdad para patrones de área:
 ## Key Concepts
 - **Writer**: agente IA con purpose, personality, emotions, memories, topics, constraints, lifelong objectives
 - **Artist Profile**: el espacio de management del writer — character sheet, traits, emotions, constraints, objectives. Se configura antes de la sesión. Es la formación del equipo.
-- **Studio**: la sesión de grabación — experiencia activa y separada del Artist Profile. Se *entra* al Studio con una transición. Dentro: Brief Setup → sesión activa → artefacto → iteración → discografía.
+- **Studio**: la sesión de grabación — experiencia activa y separada del Artist Profile. Dentro: Brief Setup → sesión activa → artefacto → iteración → discografía. (Sprint UX: la transición animada fue eliminada — el Studio abre directo en BriefSetup.)
 - **Identity Evolution**: los writers evolucionan autónomamente después de cada sesión (Sprint 6a)
 - **User Constraints**: reglas en plain English parseadas a config estructurada
 - **Discografía / Pieces Library**: las piezas escritas en el Studio se acumulan como una discografía del writer
@@ -143,8 +152,12 @@ Ver los templates de agentes — son la fuente de verdad para patrones de área:
   - Etapa 2 ✅ — CI/CD: GitHub Actions (tests en PRs, Claude review en PRs a main), branch protection
   - Etapa 3 ⏸ — Alembic migrations (diferida a cuando haya usuarios reales en prod)
 - Sprint 6a ✅ Identity Evolution via Chat — 2-stage pipeline, character sheet animado, rollback endpoint
-- **Sprint 6b (próximo):** Session snapshot + import post-sesión + Writer initialization flow ("quiero un escritor tipo GRRM")
-- Sprint 7: Memory System — memoria episódica persistente
-- Sprint 8: UX/UI dedicado + Polish — momento natural después de 6b cuando el ciclo completo funciona (crear → sesión → evolución). Incluye Agent Visualization. Antes de este sprint: grooming de UX desde la experiencia, no desde los features.
+- Sprint UX ✅ UX Polish — keyword detection eliminada, StudioTransition eliminada, loading tips, scroll fix
+- **Sprint Lang Refresh ✅ (2026-04-07):** Refactor técnico fundacional del agent layer. LangChain/LangGraph 1.x, todos los nodos migrados a `ChatAnthropic` (4 call sites incluyendo `generate_brief`), prompt caching del system prompt del writer via content blocks, Pydantic structured output en evolution + brief, modelos centralizados en `backend/config.py`, código muerto borrado (`writer_graph.py`, `tools/registry.py`, `tools/web_search.py`). 26/26 tests pasando. Learning crítico: built-in tools server-side de Anthropic emiten `server_tool_use` blocks, no `tool_use`. Cierre completo en sección "Sprint Lang Refresh" de `ARCHITECTURE.md` y D2-D5 / A1-A4 marcadas resueltas en `LANG_PLAYBOOK.md`.
+- **Sprint 6b:** Session snapshot + import post-sesión + Writer initialization flow ("quiero un escritor tipo GRRM"). Implementación: LangGraph checkpointer (Postgres) + Store para state persistente. Empezar simple en writer init — refactor a deepagents solo si se queda corto.
+- **Sprint 6c:** LangSmith setup + evals del evolution pipeline. Datasets desde traces reales, LLM-as-judge para `should_evolve` y coherencia de cambios. Antes de buscar usuarios reales — para detectar regresiones cuando el evolution pipeline cambie.
+- **Sprint 7:** Memory System con LangMem como base (episodic + semantic + procedural). NO rolled-our-own. El campo `memories` ya existe en DB pero hoy no se usa.
+- **Sprint 8:** UX/UI dedicado + Polish. Incluye Agent Visualization. Antes de este sprint: grooming de UX desde la experiencia, no desde los features.
+- **Horizonte abierto (Sprint 9+):** Studio v2 como Deep Agent (cuando piezas largas multi-capítulo lo requieran), context editing + memory tool de Anthropic (cuando sesiones de 10+ takes empiecen a doler), async subagents. Ver watch list en `LANG_PLAYBOOK.md` sección 4.
 
 Ver `SPEC.md` para la spec completa.

@@ -7,32 +7,86 @@ These three nodes implement the 2-stage identity-evolution pipeline:
   compute_node — Stage 2 (Sonnet): propose specific, incremental changes.
   apply_node   — No LLM: apply structured changes to the current identity dict.
 
-All LLM calls use ChatAnthropic from langchain_anthropic — no SDK calls.
+LLM calls go through ChatAnthropic + with_structured_output(...) so the
+response is parsed into Pydantic models — no markdown-fence regex hacks.
+Model IDs come from backend.config.settings, never hardcoded here.
 """
 
 from __future__ import annotations
 
-import json
 import logging
-import re
 from typing import Any
+
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel, Field
+
+from agents.evolution.identity import Identity
+from agents.prompts.system import EVOLUTION_DETECT_PROMPT, EVOLUTION_SYSTEM_PROMPT
+from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
 
-def _parse_json_response(raw: str) -> dict:
-    """Parse a JSON response that may be wrapped in a markdown code block."""
-    raw = raw.strip()
-    # Strip markdown code fences: ```json ... ``` or ``` ... ```
-    raw = re.sub(r'^```(?:json)?\s*', '', raw)
-    raw = re.sub(r'\s*```$', '', raw.strip())
-    return json.loads(raw.strip())
+# ---------------------------------------------------------------------------
+# Pydantic schemas — structured output contracts enforced via tool-use
+# ---------------------------------------------------------------------------
 
-from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage, SystemMessage
 
-from agents.prompts.system import EVOLUTION_DETECT_PROMPT, EVOLUTION_SYSTEM_PROMPT
-from agents.evolution.identity import Identity
+class EvolutionDecision(BaseModel):
+    """Stage 1 output — does this conversation warrant evolving the writer?"""
+
+    should_evolve: bool = Field(
+        description="True iff the conversation contains a clear, unambiguous identity-shaping signal."
+    )
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Confidence between 0.0 and 1.0.",
+    )
+    signal: str = Field(
+        default="",
+        description="One-sentence summary of WHY it triggers, or empty string if it does not.",
+    )
+
+
+class EvolutionChange(BaseModel):
+    """A single proposed change to the writer's identity."""
+
+    field: str = Field(
+        description=(
+            "Identity field name: emotions, personality, topics, memories, "
+            "lifelong_objectives, constraints, or purpose."
+        )
+    )
+    action: str = Field(description="add, modify, or remove.")
+    key: str | None = Field(
+        default=None,
+        description="Dict key — used for dict-typed fields (emotions, personality, constraints).",
+    )
+    value: str | None = Field(
+        default=None,
+        description="String value — used for list-typed fields (topics, memories, lifelong_objectives).",
+    )
+    old_value: Any = Field(
+        default=None,
+        description="Previous value — used for modify and (for list fields) remove actions.",
+    )
+    new_value: Any = Field(
+        default=None,
+        description="New value — used for add and modify actions on dict-typed fields.",
+    )
+    reason: str = Field(
+        default="",
+        description="Specific reason tied to the signal.",
+    )
+
+
+class EvolutionPlan(BaseModel):
+    """Stage 2 output — the proposed evolution as a list of incremental changes."""
+
+    changes: list[EvolutionChange] = Field(default_factory=list)
+    overall_reasoning: str = Field(default="")
 
 
 # ---------------------------------------------------------------------------
@@ -43,7 +97,7 @@ async def detect_node(state: dict[str, Any]) -> dict[str, Any]:
     """Detect whether the conversation contains identity-shaping signals.
 
     Uses a fast, conservative Haiku call to decide IF evolution should happen.
-    Defaults to no-evolution on any parse failure.
+    Defaults to no-evolution on any failure.
     """
     chat_history: list[dict] = state.get("chat_history", [])
     last_user_message: str = state.get("last_user_message", "")
@@ -61,20 +115,19 @@ async def detect_node(state: dict[str, Any]) -> dict[str, Any]:
         last_user_message=last_user_message,
     )
 
-    llm = ChatAnthropic(model="claude-haiku-4-5-20251001")  # type: ignore[call-arg]
+    llm = ChatAnthropic(model=settings.evolution_detect_model)  # type: ignore[call-arg]
+    structured_llm = llm.with_structured_output(EvolutionDecision)
     messages = [
         SystemMessage(content=prompt),
-        HumanMessage(content="Analyze the conversation and respond with the JSON object."),
+        HumanMessage(content="Analyze the conversation and return the decision."),
     ]
 
     try:
-        response = await llm.ainvoke(messages)
-        raw = response.content if isinstance(response.content, str) else str(response.content)
-        result = _parse_json_response(raw)
+        decision = await structured_llm.ainvoke(messages)
         return {
-            "should_evolve": bool(result.get("should_evolve", False)),
-            "confidence": float(result.get("confidence", 0.0)),
-            "signal": str(result.get("signal", "")),
+            "should_evolve": bool(decision.should_evolve),
+            "confidence": float(decision.confidence),
+            "signal": decision.signal or "",
         }
     except Exception:
         logger.warning("detect_node failed — defaulting to no-evolve", exc_info=True)
@@ -92,8 +145,8 @@ async def detect_node(state: dict[str, Any]) -> dict[str, Any]:
 async def compute_node(state: dict[str, Any]) -> dict[str, Any]:
     """Propose specific, incremental identity changes.
 
-    Uses Sonnet with the signal from detect_node to produce structured JSON
-    describing what should change and why.
+    Uses Sonnet with the signal from detect_node to produce a structured
+    EvolutionPlan describing what should change and why.
     """
     current_identity: dict[str, Any] = state.get("current_identity", {})
     signal: str = state.get("signal", "")
@@ -106,19 +159,21 @@ async def compute_node(state: dict[str, Any]) -> dict[str, Any]:
         current_identity=identity_text,
     )
 
-    llm = ChatAnthropic(model="claude-sonnet-4-6")  # type: ignore[call-arg]
+    llm = ChatAnthropic(model=settings.evolution_compute_model)  # type: ignore[call-arg]
+    structured_llm = llm.with_structured_output(EvolutionPlan)
     messages = [
         SystemMessage(content=prompt),
-        HumanMessage(content="Propose the identity changes based on the signal above. Return ONLY valid JSON."),
+        HumanMessage(content="Propose the identity changes based on the signal above."),
     ]
 
     try:
-        response = await llm.ainvoke(messages)
-        raw = response.content if isinstance(response.content, str) else str(response.content)
-        result = _parse_json_response(raw)
+        plan = await structured_llm.ainvoke(messages)
+        # apply_node and the rest of the pipeline expect plain dicts.
+        # exclude_none=True keeps the same shape the previous JSON-parsing path produced:
+        # only the keys relevant to a given action are present.
         return {
-            "changes": result.get("changes", []),
-            "reasoning": result.get("overall_reasoning", ""),
+            "changes": [change.model_dump(exclude_none=True) for change in plan.changes],
+            "reasoning": plan.overall_reasoning or "",
         }
     except Exception:
         logger.warning("compute_node failed — returning empty changes", exc_info=True)

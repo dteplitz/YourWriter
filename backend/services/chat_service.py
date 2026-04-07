@@ -1,6 +1,5 @@
 """Chat service — bridges the backend API with the LangGraph agent layer."""
 
-import json
 import os
 import re
 from collections.abc import AsyncIterator
@@ -175,10 +174,12 @@ async def generate_brief(writer: Writer, message: str) -> BriefResponse:
     if not os.getenv("ANTHROPIC_API_KEY"):
         raise RuntimeError("ANTHROPIC_API_KEY environment variable is not set")
 
-    import anthropic  # noqa: E402
+    from langchain_anthropic import ChatAnthropic  # noqa: E402
+    from langchain_core.messages import HumanMessage, SystemMessage  # noqa: E402
 
     from agents.prompts.system import BRIEF_GENERATION_PROMPT  # noqa: E402
     from agents.tools.constraints import format_constraints_for_prompt  # noqa: E402
+    from backend.config import settings  # noqa: E402
 
     # Load latest identity
     identity_row: WriterIdentity | None = None
@@ -205,24 +206,19 @@ async def generate_brief(writer: Writer, message: str) -> BriefResponse:
         message=message,
     )
 
-    client = anthropic.AsyncAnthropic()
-    response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
+    llm = ChatAnthropic(  # type: ignore[call-arg]
+        model=settings.writing_model,
         max_tokens=1024,
-        system="You are a writing production assistant. Return only valid JSON.",
-        messages=[{"role": "user", "content": prompt}],
     )
-
-    raw = response.content[0].text.strip()
-
-    # Strip markdown code fences if present
-    if raw.startswith("```"):
-        raw = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
+    structured_llm = llm.with_structured_output(BriefResponse)
 
     try:
-        data = json.loads(raw)
-        return BriefResponse(**data)
+        return await structured_llm.ainvoke(
+            [
+                SystemMessage(content="You are a writing production assistant."),
+                HumanMessage(content=prompt),
+            ]
+        )
     except Exception:
         # Fallback: return sensible defaults rather than raising
         return BriefResponse(
