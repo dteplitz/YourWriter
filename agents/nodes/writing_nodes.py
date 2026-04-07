@@ -3,8 +3,9 @@
 These nodes form the core content-generation pipeline:
   outline_node  →  draft_node  →  refine_node
 
-Each node calls the Anthropic API with a specialised prompt and updates
-the relevant field in WriterState.
+Each node calls Claude via ChatAnthropic with a specialised prompt and
+updates the relevant field in WriterState. Model id comes from
+backend.config.settings.writing_model — never hardcoded here.
 """
 
 from __future__ import annotations
@@ -12,30 +13,63 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
-import anthropic
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from agents.prompts.system import (
     OUTLINE_PROMPT,
-    WRITER_SYSTEM_PROMPT,
     REFINE_PROMPT,
     STUDIO_REFINE_PROMPT,
+    WRITER_SYSTEM_PROMPT,
 )
 from agents.tools.constraints import (
     format_constraints_for_prompt,
     validate_constraints,
 )
+from backend.config import settings
+
+
+_MAX_TOKENS = 8192
+
+
+def _make_llm() -> ChatAnthropic:
+    return ChatAnthropic(  # type: ignore[call-arg]
+        model=settings.writing_model,
+        max_tokens=_MAX_TOKENS,
+    )
+
+
+def _content_to_text(content: Any) -> str:
+    """Coerce a LangChain message content payload to plain text."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return "".join(parts)
+    return ""
 
 
 async def _call_claude(system: str, user_message: str) -> str:
     """Helper: send a single user message with a system prompt to Claude."""
-    client = anthropic.AsyncAnthropic()
-    response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=8192,
-        system=system,
-        messages=[{"role": "user", "content": user_message}],
+    response = await _make_llm().ainvoke(
+        [SystemMessage(content=system), HumanMessage(content=user_message)]
     )
-    return response.content[0].text
+    return _content_to_text(response.content)
+
+
+async def _stream_claude(system: str, user_message: str) -> AsyncIterator[str]:
+    """Helper: stream Claude tokens for a single (system, user) turn."""
+    async for chunk in _make_llm().astream(
+        [SystemMessage(content=system), HumanMessage(content=user_message)]
+    ):
+        text = _content_to_text(chunk.content)
+        if text:
+            yield text
 
 
 def _extract_user_request(state: dict[str, Any]) -> str:
@@ -161,15 +195,8 @@ async def refine_node(state: dict[str, Any]) -> dict[str, Any]:
 async def refine_node_stream(state: dict[str, Any]) -> AsyncIterator[str]:
     """Stream the refine step token-by-token."""
     system, user_msg = _build_refine_prompt(state)
-    client = anthropic.AsyncAnthropic()
-    async with client.messages.stream(
-        model="claude-sonnet-4-20250514",
-        max_tokens=8192,
-        system=system,
-        messages=[{"role": "user", "content": user_msg}],
-    ) as stream:
-        async for text in stream.text_stream:
-            yield text
+    async for text in _stream_claude(system=system, user_message=user_msg):
+        yield text
 
 
 # ---------------------------------------------------------------------------
@@ -221,12 +248,5 @@ async def studio_refine_node_stream(state: dict[str, Any]) -> AsyncIterator[str]
     end of the output so the caller can extract a title for the saved piece.
     """
     system, user_msg = _build_studio_refine_prompt(state)
-    client = anthropic.AsyncAnthropic()
-    async with client.messages.stream(
-        model="claude-sonnet-4-20250514",
-        max_tokens=8192,
-        system=system,
-        messages=[{"role": "user", "content": user_msg}],
-    ) as stream:
-        async for text in stream.text_stream:
-            yield text
+    async for text in _stream_claude(system=system, user_message=user_msg):
+        yield text
