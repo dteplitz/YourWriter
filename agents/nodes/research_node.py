@@ -41,8 +41,15 @@ from typing import Any
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from agents.tools.registry import TOOL_REGISTRY, get_anthropic_tools
 from backend.config import settings
+
+# Anthropic native built-in tool spec for web search.  langchain-anthropic
+# passes raw tool dicts through ``bind_tools(...)`` for built-ins.
+_WEB_SEARCH_TOOL_SPEC: dict[str, str] = {
+    "type": "web_search_20250305",
+    "name": "web_search",
+}
+_WEB_SEARCH_DISPLAY_NAME = "Buscando"
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -136,7 +143,7 @@ async def research_node_stream(state: dict[str, Any]) -> AsyncIterator[dict[str,
     )
     # web_search_20250305 is a native Anthropic built-in tool. langchain-anthropic
     # passes raw tool dicts through bind_tools(...) for built-ins.
-    llm_with_tools = llm.bind_tools(get_anthropic_tools(["web_search"]))
+    llm_with_tools = llm.bind_tools([_WEB_SEARCH_TOOL_SPEC])
 
     response = await llm_with_tools.ainvoke(
         [
@@ -160,11 +167,10 @@ async def research_node_stream(state: dict[str, Any]) -> AsyncIterator[dict[str,
         if btype in ("server_tool_use", "tool_use"):
             tool_input = _block_field(block, "input", {}) or {}
             search_query = tool_input.get("query", "") if isinstance(tool_input, dict) else ""
-            tool = TOOL_REGISTRY.get("web_search")
             yield {
                 "tool_use": {
                     "name": "web_search",
-                    "display_name": tool.display_name if tool else "Buscando",
+                    "display_name": _WEB_SEARCH_DISPLAY_NAME,
                     "query": search_query,
                 }
             }
