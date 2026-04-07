@@ -2,37 +2,35 @@
 
 *Doc vivo. Es la referencia técnica y de decisiones sobre LangChain / LangGraph / LangMem / deepagents en YourWriter. Se actualiza cuando se toma una nueva decisión sobre el stack Lang. No es brain dump congelado — es la base sobre la que se decide en cada sprint.*
 
-*Última actualización: 2026-04-07 (sesión de research del ecosistema Lang post mayo 2025)*
+*Última actualización: 2026-04-07 (Sprint Lang Refresh ejecutado y mergeado — D2/D3/D4/D5 cerradas)*
 
 ---
 
 ## 1. Stack actual en YourWriter
 
-**Versiones objetivo (post Sprint Lang Refresh):**
+**Versiones actuales (post Sprint Lang Refresh):**
 
-| Paquete | Versión objetivo | Por qué |
+| Paquete | Versión | Por qué |
 |---|---|---|
-| `langchain` | `>=1.0,<2` | LangChain 1.0 GA (oct 2025): create_agent, middleware, content blocks |
-| `langgraph` | `>=1.0,<2` | LangGraph 1.0 GA: backwards compatible con 0.2, abre checkpointer/store/Send |
-| `langchain-anthropic` | `>=0.3.20` (1.x compatible) | Provider integration para Claude |
-| `anthropic` | `>=0.49.0` | Para tools built-in (web_search_20250305) que LangChain expone via `extras` |
-| `langsmith` | `>=0.2` | Tracing + evals (Sprint 6c) |
-| `langmem` | `>=0.1` | Memoria episódica + semántica (Sprint 7) |
-
-**Versiones actuales en `requirements.txt` (pre Lang Refresh):** `langchain>=0.3.0`, `langgraph>=0.2.0`, `langchain-anthropic>=0.3.0`. Son de antes de mayo 2025 — desactualizadas en relación al ecosistema actual.
+| `langchain` | `>=1.0,<2` ✅ | LangChain 1.0 GA (oct 2025): create_agent, middleware, content blocks |
+| `langgraph` | `>=1.0,<2` ✅ | LangGraph 1.0 GA: backwards compatible con 0.2, abre checkpointer/store/Send |
+| `langchain-anthropic` | `>=0.3.20` ✅ | Provider integration para Claude. `bind_tools` acepta el dict nativo de Anthropic para built-ins |
+| `anthropic` | `>=0.49.0` | Tools built-in (`web_search_20250305`) — pasa a través del provider |
+| `langsmith` | `>=0.2` (pendiente) | Tracing + evals (Sprint 6c) |
+| `langmem` | `>=0.1` (pendiente) | Memoria episódica + semántica (Sprint 7) |
 
 **Dónde vive cada cosa:**
 
 | Área | Ubicación | Qué corre |
 |---|---|---|
-| Grafos | `agents/graphs/` | `evolution_graph.py` (único grafo activo). `writer_graph.py` está compilado pero NO se ejecuta — código muerto, se borra en Lang Refresh |
-| Nodos | `agents/nodes/` | `chat_node.py`, `writing_nodes.py`, `research_node.py`, `evolution_nodes.py` |
-| Tools | `agents/tools/` | `registry.py` (custom), `memory.py` (stub), `constraints.py`. Web search vive como tool de Anthropic, no como tool de LangChain |
+| Grafos | `agents/graphs/` | `evolution_graph.py` (único grafo compilado y ejecutado). `writer_graph.py` borrado en Lang Refresh |
+| Nodos | `agents/nodes/` | `chat_node.py` (cache_control), `writing_nodes.py`, `research_node.py` (bind_tools), `evolution_nodes.py` (Pydantic structured output) — todos en `ChatAnthropic` |
+| Tools | `agents/tools/` | `memory.py` (stub), `constraints.py`. La web search es una built-in de Anthropic declarada inline en `research_node.py`, no en un registry |
 | Prompts | `agents/prompts/system.py` | Prompts canónicos: `ARTIST_PROFILE_CHAT_SYSTEM_PROMPT`, `EVOLUTION_DETECT_PROMPT`, `EVOLUTION_SYSTEM_PROMPT`, `STUDIO_REFINE_PROMPT`, etc. |
 | Identidad | `agents/evolution/` | `Identity` dataclass + diff helpers |
 | Servicios | `backend/services/evolution_service.py` | Orquesta el grafo de evolución, separa LLM calls de DB sessions |
 
-**El único grafo realmente compilado y ejecutado es `evolution_graph`.** Todo lo demás (chat, studio) orquesta nodos directamente. Después del Sprint Lang Refresh esto cambia parcialmente — pero ver "Decisiones" más abajo: NO migramos chat a `create_agent` en Lang Refresh, lo hacemos cuando agreguemos tools al chat.
+**El único grafo realmente compilado y ejecutado es `evolution_graph`.** Todo lo demás (chat, studio) orquesta nodos directamente. Esto sigue así post Lang Refresh — D1 dice que no migramos chat a `create_agent` hasta que tengamos tools reales (Sprint 7 con memory tool).
 
 ---
 
@@ -46,35 +44,39 @@
 
 **Cuándo revisitar:** Sprint 7 (memory tool en chat).
 
-### D2 — Todo el agent layer en `ChatAnthropic`, sin SDK directo
+### D2 — Todo el agent layer en `ChatAnthropic`, sin SDK directo ✅
 
 **Decisión:** Sprint Lang Refresh migra los 3 nodos que aún usan `anthropic.AsyncAnthropic` (`chat_node.py`, `writing_nodes.py`, `research_node.py`) a `ChatAnthropic` de `langchain_anthropic`. También `chat_service.py::generate_brief()`.
 
 **Razón:** Consistencia. La regla "no SDK directo en agent layer" ya estaba escrita en CLAUDE.md y ARCHITECTURE.md, pero el código no la respetaba en 3/4 de los nodos. Sin esto no podemos: (a) usar middleware, (b) usar content blocks tipados, (c) cachear system prompts via `cache_control`, (d) usar structured output integrado. Es la base de todo lo demás.
 
-**Cuidado:** El research_node usa `web_search_20250305` (tool built-in de Anthropic). En `ChatAnthropic` esto se pasa via el parámetro `extras` de tools (LangChain 1.2+) o via el cliente Anthropic dentro del provider. Verificar la API exacta al implementar.
+**Resuelto en Lang Refresh (2026-04-07):** los 4 call sites migrados. La built-in `web_search_20250305` se pasa a `ChatAnthropic.bind_tools([{"type": "web_search_20250305", "name": "web_search"}])` — el dict nativo de Anthropic se acepta sin transformación. Ver P1.
 
-### D3 — Prompt caching del system prompt del writer
+### D3 — Prompt caching del system prompt del writer ✅
 
 **Decisión:** El `ARTIST_PROFILE_CHAT_SYSTEM_PROMPT` (que contiene la identidad completa: personality + emotions + memories + constraints + objectives) se envía con `cache_control: {"type": "ephemeral"}` en la primera llamada de cada turno del chat.
 
 **Razón:** Es un system prompt grande, idéntico entre turnos consecutivos del mismo writer. Anthropic reporta hasta **90% menos costo** y **85% menos latencia** en cache hits. Sprint 6b va a hacer las identidades aún más ricas → la ganancia se compone. Es el single biggest win de Lang Refresh.
 
+**Resuelto en Lang Refresh (2026-04-07):** activado en `chat_node.py`. El pattern correcto (corregido tras implementar) es **content blocks**, no `additional_kwargs` — ver P1.
+
 **Cuándo expira el caché:** TTL default 5 min. Si querés sesiones largas con identidad estable, hay un beta de 1h TTL (`anthropic-beta: extended-cache-ttl-2025-04-11`). Hoy no lo necesitamos.
 
-### D4 — Structured output para `compute_node` (Sprint Lang Refresh)
+### D4 — Structured output para `compute_node` ✅
 
 **Decisión:** Reemplazar `_parse_json_response()` (que hace strip de markdown fences con regex) por structured output via Pydantic schema integrado en el call de `ChatAnthropic`.
 
 **Razón:** El silent failure por fences fue uno de los pitfalls más dolorosos de Sprint 6a (memoria `feedback_llm_output_parsing.md`). Structured output integrado en el loop del modelo elimina el fence problem en origen — el modelo devuelve estructura tipada, no texto que parseamos. Bonus: con LangChain 1.0 esto **NO requiere un LLM call extra** (en LangChain pre-1.0 sí).
 
-**Cuidado QA:** Cambiar el contrato del modelo puede afectar la calidad de la detección de evolution. **Hay que validar manualmente con varios casos** que la calidad de detección no baja antes de mergear.
+**Resuelto en Lang Refresh (2026-04-07):** `EvolutionDecision`, `EvolutionPlan`, `EvolutionChange` definidas en `evolution_nodes.py`. `_parse_json_response()` borrado. `BriefResponse` también via `with_structured_output`. QA manual del evolution path en Studio: la calidad se mantuvo o mejoró.
 
-### D5 — Modelo via config, no hardcodeado
+### D5 — Modelo via config, no hardcodeado ✅
 
-**Decisión:** Mover los strings de modelo (`claude-sonnet-4-20250514`, `claude-haiku-4-5-20251001`, `claude-sonnet-4-6`) a `backend/config.py` como settings: `chat_model`, `evolution_detect_model`, `evolution_compute_model`, `studio_model`.
+**Decisión:** Mover los strings de modelo (`claude-sonnet-4-20250514`, `claude-haiku-4-5-20251001`, `claude-sonnet-4-6`) a `backend/config.py` como settings: `chat_model`, `writing_model`, `evolution_detect_model`, `evolution_compute_model`.
 
 **Razón:** Hoy está hardcodeado en 4-5 archivos distintos, con strings inconsistentes (`claude-sonnet-4-20250514` vs `claude-sonnet-4-6`). Cambiar de modelo (o hacer A/B test, o downgrade en local) requiere editar varios archivos. Centralizar es trivial y desbloquea flexibilidad.
+
+**Resuelto en Lang Refresh (2026-04-07):** 4 settings agregadas. Defaults: `claude-sonnet-4-6` para chat/writing/evolution_compute, `claude-haiku-4-5-20251001` para evolution_detect.
 
 ### D6 — LangSmith antes de tener usuarios reales (Sprint 6c)
 
@@ -124,7 +126,7 @@
 
 ### P1 — Llamada a Claude desde un nodo del agent layer
 
-**Pattern:** `ChatAnthropic` configurado con modelo desde config, system prompt cacheado, structured output cuando aplique.
+**Pattern:** `ChatAnthropic` configurado con modelo desde config, system prompt cacheado via **content blocks** (NO `additional_kwargs`), structured output cuando aplique.
 
 ```python
 # agents/nodes/foo_node.py
@@ -134,13 +136,19 @@ from backend.config import settings
 
 llm = ChatAnthropic(model=settings.chat_model, max_tokens=4096)
 
-system = SystemMessage(
-    content=ARTIST_PROFILE_CHAT_SYSTEM_PROMPT.format(...),
-    additional_kwargs={"cache_control": {"type": "ephemeral"}},  # cachear el system prompt
-)
+# El cache_control vive DENTRO del content block, no en additional_kwargs.
+# Esta es la forma correcta de marcar un prefix cacheable en langchain-anthropic.
+system = SystemMessage(content=[{
+    "type": "text",
+    "text": ARTIST_PROFILE_CHAT_SYSTEM_PROMPT.format(...),
+    "cache_control": {"type": "ephemeral"},
+}])
+
 messages = [system, HumanMessage(content=user_text)]
 response = await llm.ainvoke(messages)
 ```
+
+**Importante sobre el response:** `response.content` puede ser `str` o `list` de blocks. Para texto, hay un helper canónico `_content_to_text()` (ver `chat_node.py`, `writing_nodes.py`) que joinea todos los blocks `{"type": "text"}`. Para tools (research_node), los blocks pueden ser `text`, `tool_use`, `server_tool_use` o `web_search_tool_result` — tratar a todos.
 
 **Razón:** consistencia, observabilidad (cuando enchufemos LangSmith), prompt caching automático sobre el system prompt grande. Ver D2, D3.
 
@@ -197,9 +205,23 @@ async with AsyncPostgresSaver.from_conn_string(settings.database_url) as checkpo
 
 ### P5 — Tool registration (post Lang Refresh)
 
-**Pattern:** Tools definidas con `@tool` decorator de LangChain y bind via `bind_tools()`. Tools built-in de Anthropic (web_search) via `extras`.
+**Pattern para built-in de Anthropic (server-side):** pasar el dict nativo directo a `bind_tools()`. `langchain-anthropic` lo deja pasar tal cual.
 
-(Detalles concretos a definir cuando hagamos B1 = chat con tools. Ver D1.)
+```python
+llm = ChatAnthropic(model=settings.writing_model, max_tokens=2048)
+llm_with_tools = llm.bind_tools([
+    {"type": "web_search_20250305", "name": "web_search"},
+])
+response = await llm_with_tools.ainvoke(messages)
+
+# Los blocks de respuesta para built-in tools server-side son:
+#   - server_tool_use      (no "tool_use" — distinto de tools custom client-side)
+#   - web_search_tool_result
+#   - text                 (síntesis del modelo, posiblemente partida en varios blocks
+#                          algunos con "citations")
+```
+
+**Pattern para tools custom client-side (cuando llegue):** `@tool` decorator de LangChain + `bind_tools()`. Detalles concretos cuando hagamos D1 (chat con memory tool en Sprint 7).
 
 ---
 
@@ -220,17 +242,17 @@ async with AsyncPostgresSaver.from_conn_string(settings.database_url) as checkpo
 
 ## 5. Anti-patterns / cosas descartadas y por qué
 
-### A1 — `anthropic.AsyncAnthropic()` directo en el agent layer
-**Por qué no:** Rompe la regla de consistencia, bloquea middleware, content blocks tipados, cache_control fácil, structured output integrado. Es deuda técnica explícita que se salda en Sprint Lang Refresh. Ver D2.
+### A1 — `anthropic.AsyncAnthropic()` directo en el agent layer ✅ resuelto
+**Por qué no:** Rompe la regla de consistencia, bloquea middleware, content blocks tipados, cache_control fácil, structured output integrado. Saldado en Sprint Lang Refresh — 0 call sites en el agent layer. Ver D2.
 
-### A2 — `_parse_json_response()` con regex de markdown fences
-**Por qué no:** Es síntoma, no solución. El silent failure que oculta es peligroso. Structured output via Pydantic resuelve la causa raíz. Ver D4.
+### A2 — `_parse_json_response()` con regex de markdown fences ✅ resuelto
+**Por qué no:** Es síntoma, no solución. El silent failure que oculta es peligroso. Structured output via Pydantic resuelve la causa raíz. Borrado en Sprint Lang Refresh. Ver D4.
 
-### A3 — Tool Registry custom (`agents/tools/registry.py`)
-**Por qué no:** Reinventa lo que `bind_tools()` de LangChain ya hace nativo. Lo borramos cuando migremos research_node a `ChatAnthropic` (Sprint Lang Refresh) y reemplacemos por la API nativa.
+### A3 — Tool Registry custom (`agents/tools/registry.py`) ✅ resuelto
+**Por qué no:** Reinventaba lo que `bind_tools()` de LangChain ya hace nativo. Borrado en Sprint Lang Refresh — la spec del web_search vive inline en `research_node.py` como constante local.
 
-### A4 — Compilar grafos que no se ejecutan
-**Por qué no:** `writer_graph` está compilado en `agents/graphs/writer_graph.py` pero NO se llama en runtime — `stream_writer_agent()` invoca `chat_node` directamente. Es código muerto que confunde a quien lee. Se borra en Sprint Lang Refresh.
+### A4 — Compilar grafos que no se ejecutan ✅ resuelto
+**Por qué no:** `writer_graph` estaba compilado pero NO se llamaba en runtime. Borrado en Sprint Lang Refresh. La regla queda: si compilás un grafo, asegurate de que se ejecute, o no lo compiles.
 
 ### A5 — Migrar dos veces (SDK directo → ChatAnthropic → create_agent)
 **Por qué no:** Si en algún punto vamos a migrar a `create_agent`, mejor hacerlo en una sola pasada. Hoy NO migramos a `create_agent` (D1) — vamos solo a `ChatAnthropic`. Cuando D1 se active (Sprint 7 con memory tool), migramos directamente desde el patrón actual.
@@ -275,3 +297,4 @@ async with AsyncPostgresSaver.from_conn_string(settings.database_url) as checkpo
 ## Histórico de cambios al playbook
 
 - **2026-04-07** — Doc creado en sesión de research del ecosistema Lang post mayo 2025. Decisiones D1–D10 establecidas en conversación con Damian. Stack actual documentado pre Sprint Lang Refresh.
+- **2026-04-07** — Sprint Lang Refresh ejecutado y mergeado. D2/D3/D4/D5 marcadas ✅. A1/A2/A3/A4 resueltos. P1 corregido (cache_control vive en content blocks, no en `additional_kwargs` — descubrimiento al implementar). P5 expandido con el pattern real de built-in tools server-side. **Learning crítico:** los built-in tools de Anthropic devuelven blocks de tipo `server_tool_use` (no `tool_use`) y la síntesis llega partida en múltiples blocks `text` (algunos con `citations`). Descubrimos esto haciendo QA con Studio + "Indian Wells 2026" — el primer parser solo miraba `tool_use` y no detectaba la búsqueda. Documentado en P5 y en `feedback_anthropic_server_tool_use.md`.
