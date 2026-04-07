@@ -1,7 +1,10 @@
 """Chat node — handles conversational interaction with the writer.
 
-Uses the Anthropic Python SDK to call Claude, injecting the writer's
-identity into the system prompt so responses stay in character.
+Uses ChatAnthropic from langchain-anthropic so the agent layer never
+talks to the Anthropic SDK directly. The writer's system prompt is sent
+with cache_control={"type": "ephemeral"} so subsequent turns in the
+same conversation reuse the cached prefix (lower latency, lower cost)
+once it crosses Anthropic's caching threshold.
 """
 
 from __future__ import annotations
@@ -9,11 +12,16 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
-import anthropic
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from agents.prompts.system import ARTIST_PROFILE_CHAT_SYSTEM_PROMPT
-from agents.tools.memory import get_memories_as_prompt
 from agents.tools.constraints import format_constraints_for_prompt
+from agents.tools.memory import get_memories_as_prompt
+from backend.config import settings
+
+
+_MAX_TOKENS = 4096
 
 
 def _build_system_prompt(state: dict[str, Any]) -> str:
@@ -36,51 +44,72 @@ def _build_system_prompt(state: dict[str, Any]) -> str:
     )
 
 
-def _messages_to_anthropic(messages: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Convert LangGraph message dicts to the Anthropic messages format.
+def _build_lc_messages(state: dict[str, Any]) -> list[BaseMessage]:
+    """Assemble the LangChain message list for a chat turn.
 
-    Keeps only role and content, filtering to roles that Claude accepts
-    (user, assistant).
+    The system prompt is sent as a structured content block tagged with
+    cache_control so Anthropic can reuse its KV-cache between turns.
     """
-    converted: list[dict[str, str]] = []
-    for msg in messages:
+    system_prompt = _build_system_prompt(state)
+    system_message = SystemMessage(
+        content=[
+            {
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+    )
+
+    lc_messages: list[BaseMessage] = [system_message]
+    for msg in state.get("messages", []):
         role = msg.get("role", "user")
-        if role not in ("user", "assistant"):
-            role = "user"
-        converted.append({"role": role, "content": msg.get("content", "")})
-    return converted
+        content = msg.get("content", "")
+        if role == "assistant":
+            lc_messages.append(AIMessage(content=content))
+        else:
+            lc_messages.append(HumanMessage(content=content))
+
+    return lc_messages
+
+
+def _make_llm() -> ChatAnthropic:
+    return ChatAnthropic(  # type: ignore[call-arg]
+        model=settings.chat_model,
+        max_tokens=_MAX_TOKENS,
+    )
+
+
+def _content_to_text(content: Any) -> str:
+    """Coerce a LangChain message content payload to plain text.
+
+    LangChain returns ``content`` as either a plain string or a list of
+    content blocks (dicts) when the underlying provider streams structured
+    deltas. We only care about text blocks here.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return "".join(parts)
+    return ""
 
 
 async def chat_node(state: dict[str, Any]) -> dict[str, Any]:
-    """LangGraph node: handle a conversational turn.
+    """LangGraph node: handle a conversational turn (non-streaming).
 
-    Reads the current messages from state, calls the Anthropic API with
-    the writer's system prompt, and appends the assistant response.
-
-    Parameters
-    ----------
-    state:
-        The current WriterState dict.
-
-    Returns
-    -------
-    dict with updated ``messages`` list.
+    Reads the current messages from state, calls Claude via ChatAnthropic
+    with the writer's system prompt, and appends the assistant response.
     """
-    system_prompt = _build_system_prompt(state)
-    messages = _messages_to_anthropic(state.get("messages", []))
+    lc_messages = _build_lc_messages(state)
 
-    # The API key is expected to be passed through state or env.
-    # For now we rely on the ANTHROPIC_API_KEY environment variable.
-    client = anthropic.AsyncAnthropic()
-
-    response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=4096,
-        system=system_prompt,
-        messages=messages,
-    )
-
-    assistant_text = response.content[0].text
+    response = await _make_llm().ainvoke(lc_messages)
+    assistant_text = _content_to_text(response.content)
 
     updated_messages = list(state.get("messages", []))
     updated_messages.append({"role": "assistant", "content": assistant_text})
@@ -90,16 +119,9 @@ async def chat_node(state: dict[str, Any]) -> dict[str, Any]:
 
 async def chat_node_stream(state: dict[str, Any]) -> AsyncIterator[str]:
     """Async generator that yields text chunks from Claude streaming API."""
-    system_prompt = _build_system_prompt(state)
-    messages = _messages_to_anthropic(state.get("messages", []))
+    lc_messages = _build_lc_messages(state)
 
-    client = anthropic.AsyncAnthropic()
-
-    async with client.messages.stream(
-        model="claude-sonnet-4-20250514",
-        max_tokens=4096,
-        system=system_prompt,
-        messages=messages,
-    ) as stream:
-        async for text in stream.text_stream:
+    async for chunk in _make_llm().astream(lc_messages):
+        text = _content_to_text(chunk.content)
+        if text:
             yield text
