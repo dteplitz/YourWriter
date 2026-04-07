@@ -1,7 +1,8 @@
 # YourWriter — Estado Funcional del Producto
 
 *Documento vivo. Se actualiza al final de cada sprint con lo que quedó funcional.*
-*Última actualización: Sprint 6a ✅ — 2026-03-19*
+*Última actualización: 2026-04-07 — roadmap reorganizado tras research del ecosistema Lang.*
+*Próximo: Sprint Lang Refresh (refactor técnico fundacional, sin cambios funcionales). Ver `SPRINT_LANG_REFRESH.md` y `LANG_PLAYBOOK.md`.*
 
 ---
 
@@ -58,7 +59,7 @@ Todo es editable inline con animaciones de diff al guardar. Los cambios persiste
 Al scrollear hacia abajo, el header sticky gana una fila compacta con mini emotion bars y trait chips — permite ver el estado del writer mientras se usa el chat.
 
 **Zona bajo el fold — Chat + Evolution Timeline**
-- **ChatPanel**: conversación libre con el writer. Keyword detection determina si responde como chat o activa el pipeline de escritura. El botón **"Studio →"** lleva al Studio.
+- **ChatPanel**: conversación libre con el writer. El writer SIEMPRE responde como chat — no hay keyword detection. Para escribir, usar el botón **"Studio →"** que lleva al Studio.
 - **EvolutionFeed**: log de cambios de identidad — cambios manuales y evoluciones automáticas via chat (diferenciados visualmente).
 
 ### Studio — sesión de escritura activa
@@ -67,22 +68,20 @@ Se accede vía botón "Studio →" desde el ChatPanel. El Studio es una vista co
 
 **Flujo dentro del Studio:**
 
-1. **Transición animada** — fade-in que muestra el nombre del writer, sus emociones actuales, constraints y la última pieza escrita. Botón "Entrar" para continuar.
+1. **Brief Setup** — el usuario describe en lenguaje libre qué quiere escribir. El sistema genera un brief estructurado (formato, tono, constraints aplicados, word limit). Si el brief necesita aclaración, el sistema pregunta antes de continuar. Header con nombre y purpose del writer visible en la parte superior.
 
-2. **Brief Setup** — el usuario describe en lenguaje libre qué quiere escribir. El sistema genera un brief estructurado (formato, tono, constraints aplicados, word limit). Si el brief necesita aclaración, el sistema pregunta antes de continuar.
-
-3. **Sesión activa** — pipeline de escritura con fases visibles en tiempo real:
-   - **Preparando** → pill "Armando estructura..."
+2. **Sesión activa** — pipeline de escritura con fases visibles en tiempo real:
+   - **Preparando** → pill con loading tip rotativo (cambia cada 4s)
    - **Tool use (web search)** → pill "Buscando: [query]"
-   - **Drafting** → pill "Primer take..."
-   - **Refining** → pill "Mezclando..."
+   - **Drafting** → pill con loading tip rotativo
+   - **Refining** → pill con loading tip rotativo
    - Texto streameado en tiempo real durante las fases
 
-4. **Artefacto** — la pieza terminada aparece como un documento (no como burbuja de chat): título generado por el modelo, badge de formato, botón de copiar, botones "Iterar" y "Finalizar sesión".
+3. **Artefacto** — la pieza terminada aparece como un documento (no como burbuja de chat): título generado por el modelo, badge de formato, botón de copiar, botones "Iterar" y "Finalizar sesión".
 
-5. **Loop de iteración** — notas del productor → nuevo take. El textarea de notas permite pedir cambios específicos y relanzar el pipeline sin salir del Studio.
+4. **Loop de iteración** — notas del productor → nuevo take. El textarea de notas permite pedir cambios específicos y relanzar el pipeline sin salir del Studio.
 
-6. **Discografía** — las piezas se acumulan como historial del writer. Expandibles, con fecha relativa en español.
+5. **Discografía** — las piezas se acumulan como historial del writer. Expandibles, con fecha relativa en español.
 
 ### Identity Evolution via Chat ← Sprint 6a
 
@@ -113,11 +112,14 @@ El Studio usa `web_search_20250305` (herramienta built-in de Anthropic SDK ≥0.
 
 | Feature | Sprint |
 |---------|--------|
-| Session snapshot + import post-sesión | Sprint 6b |
+| Refactor técnico del agent layer (LangChain 1.x, prompt caching, structured output, modelos en config) | Sprint Lang Refresh (próximo, sin impacto funcional) |
+| Session snapshot + import post-sesión (vía LangGraph checkpointer + Store) | Sprint 6b |
 | Writer initialization flow (GRRM-style) | Sprint 6b |
+| Tracing y evals automáticos del evolution pipeline (LangSmith + LLM-as-judge) | Sprint 6c |
+| Memory System (memoria episódica persistente, vía LangMem) | Sprint 7 |
 | Alembic migrations | Sprint 5.5 Etapa 3 ⏸ (cuando haya usuarios reales en prod) |
-| Memory System (memoria episódica persistente) | Sprint 7 |
 | Polish + Agent Visualization | Sprint 8 |
+| Studio v2 como Deep Agent (piezas largas multi-capítulo) | Horizonte abierto (Sprint 9+) |
 
 ---
 
@@ -132,12 +134,11 @@ El Studio usa `web_search_20250305` (herramienta built-in de Anthropic SDK ≥0.
 6. Click en el writer → Writer Page
 7. Zona hero: ver y editar la identidad del writer (character sheet RPG)
 8. Scrollear → ChatPanel + EvolutionFeed
-   - Chat libre → respuesta conversacional
-   - Pedir escritura por keywords → pipeline con fases
+   - Chat libre → respuesta conversacional (siempre — sin keyword detection)
    - Tras la respuesta: pipeline de evolución corre en background
    - Si hay evolución: character sheet se anima, banner "Deshacer" por 30s, EvolutionFeed se actualiza
-9. Click "Studio →" → transición animada al Studio
-10. Studio: Brief Setup → sesión activa (fases + tool use) → artefacto
+9. Click "Studio →" → va directo al Studio (sin transición animada)
+10. Studio: Brief Setup (con header nombre+purpose) → sesión activa (fases + loading tips + tool use) → artefacto
 11. Artefacto: copiar / iterar con notas / finalizar sesión
 12. Discografía: ver todas las piezas del writer
 ```
@@ -146,5 +147,4 @@ El Studio usa `web_search_20250305` (herramienta built-in de Anthropic SDK ≥0.
 
 ## Notas de UX conocidas
 
-- La keyword detection en el chat aún puede tener falsos positivos/negativos (mejorada con word boundary regex, pero no es perfecta). El camino largo es eliminarla — el Studio es el lugar correcto para escritura, el chat es para conversar.
-- El output de escritura en el CHAT todavía aparece como burbuja (solo en el chat, no en el Studio). Se puede limpiar en una iteración futura.
+- La separación Chat / Studio es ahora estructural: el chat es siempre conversacional (sin keyword detection), el Studio es el lugar correcto para escritura. No hay ambigüedad.

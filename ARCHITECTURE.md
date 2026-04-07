@@ -1,7 +1,7 @@
 # YourWriter — Arquitectura Técnica
 
 *Documento vivo. Se actualiza al final de cada sprint con lo que fue construido o modificado.*
-*Última actualización: Sprint 6a ✅ — 2026-03-19*
+*Última actualización: 2026-04-07 — notas técnicas reorganizadas tras research del ecosistema Lang. Para el contexto completo de decisiones sobre LangChain/LangGraph/LangMem, ver `LANG_PLAYBOOK.md`.*
 
 ---
 
@@ -275,7 +275,7 @@ Los eventos de evolución se emiten **después** del `done`. El stream permanece
 
 | Pipeline | Función | Trigger |
 |----------|---------|---------|
-| `stream_writer_agent()` | Chat conversacional + write por keywords | `POST /chat/{id}/message/stream` |
+| `stream_writer_agent()` | Chat conversacional (siempre — sin keyword detection) | `POST /chat/{id}/message/stream` |
 | `stream_studio_session()` | Studio con research → outline → draft → refine | `POST /chat/{id}/studio/stream` |
 
 **`stream_studio_session()` NO usa el grafo compilado.** Orquesta manualmente:
@@ -287,14 +287,17 @@ Los eventos de evolución se emiten **después** del `done`. El stream permanece
 
 ### writer_graph (LangGraph)
 
+`stream_writer_agent()` llama a `chat_node` directamente — el grafo compilado con `detect_intent_node` ya no se usa en el path de chat. El writer siempre responde como conversación; el Studio es el canal exclusivo para escritura.
+
 ```
+[legacy graph — ya no se llama en runtime]
 START
   └─► detect_intent_node (word-boundary regex sobre keywords de escritura)
         ├─ mode="chat"  ──────────────────────────────► chat_node ──► END
         └─ mode="write" ──► outline_node ──► draft_node ──► refine_node ──► respond_node ──► END
 ```
 
-**Nota:** El streaming del chat tampoco corre a través del grafo compilado. `chat_service.py::stream_writer_agent()` orquesta los nodos manualmente.
+**Sprint UX:** `detect_intent_node` eliminado del path activo. `ARTIST_PROFILE_CHAT_SYSTEM_PROMPT` define el sistema prompt del writer en el chat. `stream_writer_agent()` llama directamente a `chat_node`.
 
 ### Evolution Pipeline (Sprint 6a)
 
@@ -313,7 +316,10 @@ START → detect_node (Haiku) → [should_evolve?]
 ### Principio: no SDK directo en el agent layer
 
 **Todo LLM call usa LangChain** (`ChatAnthropic` de `langchain_anthropic`). Sin excepciones.
-Deuda técnica existente: `evolution_nodes.py` y `chat_service.py::generate_brief()` usan `anthropic.AsyncAnthropic()` directamente — a refactorizar en sprint futuro.
+
+**Estado actual (pre Sprint Lang Refresh):** la regla está incumplida en la mayoría de los nodos. Solo `evolution_nodes.py` la respeta. `chat_node.py`, `writing_nodes.py`, `research_node.py` y `chat_service.py::generate_brief()` usan `anthropic.AsyncAnthropic()` directamente. Esta deuda se salda completa en el Sprint Lang Refresh — ver `SPRINT_LANG_REFRESH.md` y la decisión D2 del `LANG_PLAYBOOK.md`.
+
+**Por qué importa:** sin esta consistencia no podemos usar middleware nativo, content blocks tipados, prompt caching via `cache_control` en `SystemMessage`, ni structured output integrado en el loop. Es la base que habilita Sprint 6b/6c/7.
 
 ### Tool Registry (Sprint 5)
 
@@ -383,7 +389,7 @@ Variables CSS canónicas — no usar colores o radii hardcodeados:
 
 Estilos por área en archivos separados (no en `index.css`):
 - `config-panel.css` — Artist Profile / character sheet
-- `writing.css` — Studio views (StudioTransition, BriefSetup, WritingArtifact, PiecesLibrary)
+- `writing.css` — Studio views (BriefSetup, WritingArtifact, PiecesLibrary)
 - `session.css` — SessionExperience (streaming view, phase pills, tool use pills)
 
 **Regla de imports CSS:** siempre relativo a `src/`, no al directorio del componente:
@@ -402,9 +408,8 @@ Estilos por área en archivos separados (no en `index.css`):
 | `EvolutionFeed` | Log de cambios de identidad |
 | `WriterCard` | Card en el dashboard |
 | `CreateWriterModal` | Modal de creación de writer |
-| `StudioTransition` | Pantalla de fade-in al entrar al Studio |
-| `BriefSetup` | Brief en 4 estados: input → loading → preview → clarifying |
-| `SessionExperience` | Sesión activa: stream + phase pills + tool use pill + artifact |
+| `BriefSetup` | Brief en 4 estados: input → loading → preview → clarifying. Header con nombre+purpose del writer. |
+| `SessionExperience` | Sesión activa: stream + phase pills con `LOADING_TIPS` rotativos (cada 4s) + tool use pill + artifact |
 | `WritingArtifact` | Documento final: título, formato badge, copy, Iterar/Finalizar |
 | `IterationInput` | Textarea de notas del productor, relanza el pipeline |
 | `PiecesLibrary` | Discografía del writer — lista expandible con fechas en español |
@@ -428,6 +433,11 @@ writer-page (overflow-y: auto)
 ```
 
 `WriterPage` usa un scroll event listener sobre `pageRef` para detectar cuando el hero scroll fuera de vista y activar el `writer-rpg-strip`. `ConfigPanel` recibe `onIdentityLoaded` callback para que WriterPage tenga los datos de identidad disponibles para el strip.
+
+**Scroll fix (Sprint UX):** Tres partes necesarias para que el scroll arranque en la posición correcta:
+1. `overflow-anchor: none` en `.writer-page` — deshabilita el scroll anchoring de Chrome. Sin esto, cuando ConfigPanel crece al cargar la identidad (~400ms), Chrome re-scrollea automáticamente para mantener el chat visible, bypaseando JavaScript.
+2. `history.scrollRestoration = 'manual'` en `main.tsx` — previene que el browser restaure posiciones de scroll de divs en navegaciones SPA.
+3. Reset de scroll en el effect `[loading]` (no en `[id]`) — el `pageRef` es null mientras `loading=true` (el div no está en el DOM); solo es válido después de que `loading → false`.
 
 ### Patrón de CSS para layouts
 - Layouts scrollables: el contenedor principal tiene `overflow-y: auto`
@@ -461,13 +471,60 @@ Puntos clave de la implementación:
 - Evolución trigger: post-respuesta del writer en el chat (inline en SSE stream)
 - 2-stage approach: detect (Haiku) → compute (Sonnet). Solo corre si detect dice sí.
 - Rate limiting: solo corre si el mensaje tiene >15 palabras o hay >3 exchanges sin check
-- `_parse_json_response()`: strip de markdown code fences antes de `json.loads()` — Haiku wrapa JSON en ` ```json ``` `; sin este fix el pipeline falla silenciosamente
+- `_parse_json_response()`: strip de markdown code fences antes de `json.loads()` — Haiku wrapa JSON en ` ```json ``` `; sin este fix el pipeline falla silenciosamente. *(Será reemplazado por structured output via Pydantic en el Sprint Lang Refresh — ver decisión D4 del PLAYBOOK)*
 - Timeout: `asyncio.wait_for(run_evolution(), timeout=45)` para prevenir hangs
 - `evolution_service.py`: separa LLM calls de sesiones DB (regla de sesión corta)
 - Frontend: `onDone` callback re-habilita el chat UI inmediatamente; el stream sigue abierto para `evolution_detected`
 - Config panel: actualización silenciosa de identidad en el effect de `pendingEvolution` — NO llama `loadIdentity()` (pondría `loading=true` y ocultaría el Undo banner)
 
+**Sprint UX — UX Polish: ✅ COMPLETADO (2026-03-28)**
+
+Cambios principales:
+- Keyword detection eliminada: `stream_writer_agent()` llama directamente a `chat_node`. El chat es siempre conversacional.
+- `StudioTransition` componente eliminado: el Studio abre directo en `BriefSetup`.
+- `BriefSetup`: header con nombre+purpose del writer agregado.
+- `SessionExperience`: array `LOADING_TIPS` con tips rotativos cada 4s durante las fases.
+- `WriterPage` scroll fix: `overflow-anchor: none` + `scrollRestoration: manual` + reset en effect `[loading]`.
+- `ChatPanel` scroll isolation fix.
+
+**Sprint Lang Refresh — Refactor técnico fundacional (📋 PRÓXIMO):**
+
+Plan completo en `SPRINT_LANG_REFRESH.md`. Razonamiento del ecosistema en `LANG_PLAYBOOK.md`.
+
+Resumen del scope (sin cambios funcionales — 100% refactor):
+- Bumpear `langchain` y `langgraph` a 1.x (ambos tienen GA desde oct 2025)
+- Migrar `chat_node`, `writing_nodes`, `research_node` y `chat_service.generate_brief()` de `anthropic.AsyncAnthropic()` directo a `ChatAnthropic` (saldar la deuda flagueada arriba)
+- Activar prompt caching del system prompt del writer via `cache_control` en `SystemMessage` (impacto: ~85% menos latencia, ~90% menos costo desde el mensaje 2 del chat)
+- Reemplazar `_parse_json_response()` por structured output via Pydantic schemas en `compute_node` y `detect_node` (eliminar silent failures por markdown fences)
+- Centralizar modelos hardcodeados en `backend/config.py` (`chat_model`, `evolution_detect_model`, `evolution_compute_model`, `studio_model`)
+- Borrar código muerto: `agents/graphs/writer_graph.py` (compilado pero no ejecutado), `agents/tools/registry.py` (reemplazado por `bind_tools` nativo), `agents/tools/web_search.py` (stub)
+
+**Por qué este sprint primero:** las versiones desactualizadas y la deuda técnica del SDK directo bloquean Sprint 6b (que necesita LangGraph 1.x para checkpointer + store), Sprint 6c (LangSmith para evals) y Sprint 7 (LangMem). Sin Lang Refresh, los próximos sprints construyen sobre base inestable.
+
 **Sprint 6b — Session Snapshot + Writer Initialization:**
-- Session snapshot: fork de identidad al entrar al Studio. Particularizaciones no contaminan el general.
-- Import post-sesión: el usuario puede importar stats de la sesión al general
-- Writer initialization flow: descripción libre → LLM genera identity inicial ("quiero un escritor tipo GRRM")
+- Session snapshot: fork de identidad al entrar al Studio. **Implementación: LangGraph checkpointer (Postgres en prod, SQLite en local) + Store namespaces** — el thread state mantiene el fork, el Store namespace `writers/{id}/sessions/{session_id}` mantiene los artefactos. Ver decisión D8 del PLAYBOOK.
+- Import post-sesión: el usuario puede importar stats de la sesión al general — implementado moviendo entries del namespace de la sesión al namespace del general.
+- Writer initialization flow: descripción libre → LLM genera identity inicial ("quiero un escritor tipo GRRM"). **Empezar simple** (un LLM call estructurado con Pydantic). Si la calidad se queda corta, refactor a deepagents en una iteración posterior — no prematurice. Ver decisión D9.
+
+**Sprint 6c — LangSmith + Evolution Evals:**
+
+Visibilidad sistemática de la calidad del feature diferenciador del producto. Sin esto, escalar es a ciegas.
+
+Setup mínimo:
+- LangSmith account + env vars (`LANGCHAIN_TRACING_V2`, `LANGCHAIN_API_KEY`, `LANGCHAIN_PROJECT`)
+- Tracing automático en el agent layer (auto via `ChatAnthropic` cuando las env vars están seteadas)
+- Dataset inicial: ~30 conversaciones reales etiquetadas manualmente (`should_evolve` sí/no, qué cambios serían razonables)
+- 2 evaluators tipo LLM-as-judge:
+  - **`detect_correctness`** — ¿la decisión `should_evolve` está alineada con la etiqueta del dataset?
+  - **`compute_coherence`** — dado el `signal`, ¿los cambios propuestos son coherentes y graduales (no rewrites)?
+- Online evals en producción con alertas si la calidad cae por debajo de un threshold
+
+Ver decisión D6 del PLAYBOOK.
+
+**Sprint 7 — Memory System (con LangMem):**
+
+Reemplaza el plan original de "construir desde cero". **Adoptamos LangMem SDK** como base: episodic memory (sesiones del Studio como experiencias narrativas), semantic memory (facts del writer), procedural memory (patrones de estilo aprendidos). Ver decisión D7.
+
+El campo `memories` en `writer_identities` ya existe pero hoy no se usa — Sprint 7 lo activa modelando sobre LangMem, no inventando una memoria nueva. Trabajo del sprint: modelar nuestro dominio sobre LangMem (qué namespaces usamos, cómo se popula desde el Studio, cómo se inyecta al chat), no construir la infraestructura de memoria.
+
+**Candidato natural para D1:** Sprint 7 es donde finalmente migraríamos `chat_node` a `create_agent` con un memory tool nativo, porque ahí el chat tiene una herramienta real que justifica el cambio.
