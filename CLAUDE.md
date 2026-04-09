@@ -32,7 +32,7 @@ No recordás nada de lo anterior sobre este proyecto. El contexto de quién es D
 **Leer al inicio de cada sesión (antes de proponer nada):**
 1. `PRODUCT.md` — qué está construido funcionalmente
 2. `ARCHITECTURE.md` — estructura técnica actual
-3. Sprint Lang Refresh ✅ cerrado (2026-04-07, ver `SPRINT_LANG_REFRESH.md` para el plan original y la sección "Sprint Lang Refresh" de `ARCHITECTURE.md` para el cierre). Sprint 6a ✅ cerrado (`SPRINT6A.md`). Sprint UX ✅ cerrado (retro inline en ARCHITECTURE.md y CLAUDE.md). Próximo: **Sprint 6b** — Session snapshot + Writer initialization. *(actualizar esta línea cada sprint)*
+3. Sprint Lang Refresh ✅ cerrado (2026-04-07). Sprint 6a ✅ cerrado. Sprint UX ✅ cerrado. **En curso: Sprint 6b** — plan en 2 partes en `SPRINT6B.md` (Parte A definida = Slice 0 + Slice 1; Parte B a refinar = Slices 2/3/4). **Sesión actual: ejecutando Slice 0** (Postgres local en `docker-compose.yml`, branch `chore/sprint-6b-slice-0-postgres-local`). *(actualizar esta línea cada sprint)*
 4. `LANG_PLAYBOOK.md` — referencia viva del ecosistema Lang en YourWriter (decisiones, patterns, watch list). Leer antes de cualquier decisión sobre LangChain/LangGraph/LangMem/deepagents
 5. `LINEAGE.md` — razonamiento de diseño (siempre relevante)
 6. `GLOSSARY.md` — terminología canónica (leer antes de tomar decisiones de UX o naming)
@@ -49,7 +49,22 @@ Ser honesto, no performativo. Si los docs son suficientes, decirlo. Si no, decir
 
 **La app la corre Damian** — `bash dev.sh` desde el root (usa Docker Compose, requiere Docker Desktop corriendo). Primera vez ~2 min de build. Para QA pedile el puerto (frontend: 3000, backend: 8001).
 
-**Contexto de la última sesión (2026-04-07):** Sprint Lang Refresh ejecutado y mergeado. 9 commits. Toda la deuda del agent layer saldada: LangChain/LangGraph 1.x, los 4 call sites del SDK directo migrados a `ChatAnthropic`, prompt caching activo en chat, Pydantic structured output en `evolution_nodes` y `generate_brief`, modelos centralizados en config, código muerto borrado. QA con Studio: el research path firó web search correctamente para una query time-sensitive ("Australian Open 2026") tras descubrir que los built-in tools server-side de Anthropic emiten `server_tool_use` y no `tool_use`. Próximo: **Sprint 6b** (Session snapshot + Writer initialization) — ahora con LangGraph 1.x checkpointer/store como base. Roadmap completo: Sprint 6b → 6c (LangSmith + evals) → 7 (LangMem) → 8 (UX/Polish).
+**Contexto de la última sesión (2026-04-08, segundo planning de Sprint 6b):** Cerramos las decisiones del sprint y descubrimos varias más al mapear el frontend del Studio. El plan del Sprint 6b quedó en 2 partes en `SPRINT6B.md`:
+- **Parte A (definida):** Slice 0 (Postgres local en docker-compose.yml) + Slice 1 (StudioSession/StudioTake con campo `lifecycle`, contrato del endpoint cambiado a `{brief, session_id?, iteration_notes?}`, frontend mantiene session_id en useRef).
+- **Parte B (a refinar al inicio de cada slice):** Slices 2/3/4 con lo que sí está claro + open questions explícitas.
+
+**Decisiones nuevas clave de la sesión (D5-D9 en SPRINT6B.md):**
+- D5: Postgres local — unifica motor con prod antes de tocar Slice 1/3. Tests siguen en SQLite.
+- D6/D7: campo `lifecycle` (no `status`) con valores `active|complete|imported|skipped|abandoned`. `drafting`/`refining` salen porque son fases del runtime del grafo, no del producto. Naming distinto del checkpointer state para eliminar costo cognitivo. Conviven dos representaciones: `lifecycle` para producto, checkpointer para runtime.
+- D8: `iteration_notes` separado del `brief` en el contrato del endpoint — el frontend pisaba `brief.notes` en cada iteración, bug latente.
+- D9: endpoint acepta `session_id` opcional, yielda evento `session_started` nuevo, frontend mantiene `sessionIdRef` entre takes. Slice 1 ya no es "puro backend invisible" — requiere plumbing frontend coordinado.
+
+**Aprendizajes capturados a memoria:**
+- `feedback_map_frontend_before_contract.md` — Mapear el frontend antes de cerrar contratos de API/DB descubre bugs latentes.
+- `feedback_naming_distinct_adjacent_layers.md` — Naming distinto entre capas adyacentes que comparten un concepto (producto vs runtime).
+- `feedback_unify_dev_prod_engines_early.md` — Unificar motor de DB local/prod antes de meter feature que dependa del motor.
+
+**Sesión actual (en ejecución): Slice 0** — Postgres local en `docker-compose.yml`. Branch `chore/sprint-6b-slice-0-postgres-local`. Roadmap completo después: Slice 1 → Slice 2 → Slice 3 → Slice 4 → Sprint 6b.5 (Writer init) → 6c (LangSmith) → 7 (LangMem) → 8 (UX).
 
 **Estado real del código (post Etapa 1 — leer si vas a trabajar en backend/infra):**
 - `backend/config.py` — existe. `pydantic-settings`, lee `DATABASE_URL`, `JWT_SECRET_KEY`, `CORS_ORIGINS`, `ANTHROPIC_API_KEY`, `ENVIRONMENT`. Property `is_production`.
