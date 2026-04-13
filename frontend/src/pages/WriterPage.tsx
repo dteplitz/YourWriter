@@ -1,20 +1,44 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import ChatPanel from '../components/ChatPanel';
 import ConfigPanel from '../components/ConfigPanel';
 import EvolutionFeed from '../components/EvolutionFeed';
 import { useWriterStore } from '../stores/writerStore';
 import type { Identity, EvolutionDetectedEvent } from '../types';
+import type { SessionImportFeedback } from '../types/studio';
 import * as api from '../api/client';
+
+interface WriterPageLocationState {
+  sessionImportFeedback?: SessionImportFeedback;
+}
+
+function summarizeImportedChanges(feedback: SessionImportFeedback | null): string {
+  if (!feedback || feedback.status !== 'imported' || !feedback.importedChanges?.length) {
+    return '';
+  }
+
+  const summary = feedback.importedChanges
+    .slice(0, 3)
+    .map((change) => (change.key ? `${change.action} ${change.field}.${change.key}` : `${change.action} ${change.field}`))
+    .join(' · ');
+
+  if (feedback.importedChanges.length > 3) {
+    return `${summary} · +${feedback.importedChanges.length - 3} mas`;
+  }
+
+  return summary;
+}
 
 export default function WriterPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { selectedWriter, selectWriter } = useWriterStore();
   const [loading, setLoading] = useState(true);
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [heroVisible, setHeroVisible] = useState(true);
   const [pendingEvolution, setPendingEvolution] = useState<EvolutionDetectedEvent | null>(null);
+  const [sessionImportFeedback, setSessionImportFeedback] = useState<SessionImportFeedback | null>(null);
   const heroRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
 
@@ -47,6 +71,14 @@ export default function WriterPage() {
     return () => page.removeEventListener('scroll', check);
   }, [loading]);
 
+  useEffect(() => {
+    const state = location.state as WriterPageLocationState | null;
+    if (!state?.sessionImportFeedback) return;
+
+    setSessionImportFeedback(state.sessionImportFeedback);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.key]);
+
   const loadWriter = async (writerId: string) => {
     setLoading(true);
     try {
@@ -70,6 +102,7 @@ export default function WriterPage() {
         .slice(0, 5)
     : [];
   const traits = identity ? Object.entries(identity.personality).slice(0, 3) : [];
+  const importedSummary = summarizeImportedChanges(sessionImportFeedback);
 
   return (
     <div ref={pageRef} className="writer-page">
@@ -107,6 +140,31 @@ export default function WriterPage() {
           ))}
         </div>
       </div>
+
+      {sessionImportFeedback && (
+        <div
+          className={`writer-session-banner writer-session-banner--${sessionImportFeedback.status}`}
+          role="status"
+        >
+          <div className="writer-session-banner-copy">
+            <strong>
+              {sessionImportFeedback.status === 'imported'
+                ? 'El writer evoluciono por esta sesion.'
+                : 'La sesion se cerro sin importar cambios.'}
+            </strong>
+            {sessionImportFeedback.status === 'imported' && importedSummary && (
+              <span>{importedSummary}</span>
+            )}
+          </div>
+          <button
+            className="writer-session-banner-dismiss"
+            onClick={() => setSessionImportFeedback(null)}
+            aria-label="Cerrar mensaje"
+          >
+            x
+          </button>
+        </div>
+      )}
 
       {/* Hero: Artist Profile */}
       <div ref={heroRef} className="writer-hero">

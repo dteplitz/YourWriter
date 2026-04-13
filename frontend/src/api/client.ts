@@ -10,7 +10,16 @@ import type {
   EvolutionEntry,
   EvolutionDetectedEvent,
 } from '../types';
-import type { Brief, Piece, ToolUseEvent, ToolResultEvent } from '../types/studio';
+import type {
+  Brief,
+  Piece,
+  ToolUseEvent,
+  ToolResultEvent,
+  SessionImportProposalResponse,
+  SessionImportRequest,
+  SessionImportResponse,
+  SessionSkipResponse,
+} from '../types/studio';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
 
@@ -235,6 +244,35 @@ export async function sendBrief(
 
 export async function getPieces(writerId: string): Promise<Piece[]> {
   const response = await fetchWithAuth(`/writers/${writerId}/pieces`);
+  return response.json();
+}
+
+export async function createSessionImportProposal(
+  sessionId: number
+): Promise<SessionImportProposalResponse> {
+  const response = await fetchWithAuth(`/sessions/${sessionId}/import-proposal`, {
+    method: 'POST',
+  });
+  return response.json();
+}
+
+export async function importSessionChanges(
+  sessionId: number,
+  body: SessionImportRequest
+): Promise<SessionImportResponse> {
+  const response = await fetchWithAuth(`/sessions/${sessionId}/import`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
+export async function skipSessionImport(
+  sessionId: number
+): Promise<SessionSkipResponse> {
+  const response = await fetchWithAuth(`/sessions/${sessionId}/skip`, {
+    method: 'POST',
+  });
   return response.json();
 }
 

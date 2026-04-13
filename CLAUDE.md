@@ -57,6 +57,9 @@ YourWriter es una plataforma multi-usuario donde los usuarios crean, customizan 
 
 ---
 
+## GitHub
+Repo: `dteplitz/YourWriter` — usar GitHub MCP para PR reviews, crear PRs al cierre de sprint, explorar historial de archivos.
+
 ## Development Workflow
 
 ### Proceso
@@ -113,7 +116,7 @@ Ver los templates de agentes — son la fuente de verdad para patrones de área:
 
 Sprints 1–Lang Refresh ✅ — historial completo en `ARCHITECTURE.md`.
 
-- **Sprint 6b** 🔄 Session entity + Post-sesión import. Plan en `SPRINT6B.md`. Slice 0 ✅ (Postgres local, PR #11), Slice 1 ✅ (PR #12, `StudioSession`/`StudioTake`, session_repository, stream plumbing). Próximo: Slice 2 (import flow).
+- **Sprint 6b** 🔄 Session entity + Post-sesión import. Plan en `SPRINT6B.md`. Slice 0 ✅ (Postgres local, PR #11), Slice 1 ✅ (PR #12, `StudioSession`/`StudioTake`, session_repository, stream plumbing), Slice 2 ✅ (post-session import flow backend + frontend + QA). Próximo: Slice 3 (checkpointer).
 - **Sprint 6b.5** ⏳ Writer initialization flow conversacional (reemplaza CreateWriterModal).
 - **Sprint 6c** ⏳ LangSmith + evals del evolution pipeline.
 - **Sprint 7** ⏳ Memory System (LangMem — episodic, semantic, procedural).

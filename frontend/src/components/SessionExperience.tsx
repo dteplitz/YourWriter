@@ -43,7 +43,7 @@ export default function SessionExperience({
   useEffect(() => {
     if (hasLaunchedRef.current) return;
     hasLaunchedRef.current = true;
-    launchStream(brief.notes);
+    launchStream();
   }, []);
 
   useEffect(() => {
@@ -119,7 +119,7 @@ export default function SessionExperience({
   };
 
   const handleFinish = () => {
-    onSessionEnd();
+    onSessionEnd(sessionIdRef.current);
     setSessionState('done');
   };
 
