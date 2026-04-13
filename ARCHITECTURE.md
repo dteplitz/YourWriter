@@ -11,7 +11,7 @@
 |------|-----------|
 | Frontend | React 19, Vite, TypeScript, Zustand, react-router-dom |
 | Backend | Python 3.11+, FastAPI, uvicorn |
-| Base de datos | SQLite (SQLAlchemy async + aiosqlite) |
+| Base de datos | PostgreSQL en runtime (SQLAlchemy async + asyncpg). SQLite (aiosqlite) en tests. |
 | Agent layer | LangChain, LangGraph, Anthropic SDK ≥0.49.0 |
 | Auth | JWT (email/password) |
 
@@ -30,26 +30,31 @@
 ```bash
 bash dev.sh          # arranca docker compose up --build
 ```
-Requiere Docker Desktop corriendo. Primera vez tarda ~2 min (build de imágenes). Las siguientes arrancan rápido.
+Requiere Docker Desktop corriendo. Primera vez tarda ~2 min (build de imágenes + pull de `postgres:16-alpine`). Las siguientes arrancan rápido.
 
 Cuando ves esto, está listo:
 ```
+db-1        | LOG:  database system is ready to accept connections
 backend-1   | INFO:     Application startup complete.
 frontend-1  | VITE ready in ... Local: http://localhost:3000/
 ```
 
-- `Ctrl+C` para parar. `docker compose down` para limpiar contenedores.
+- `Ctrl+C` para parar. `docker compose down` para limpiar contenedores (los datos persisten en el volume `pg_data`). `docker compose down -v` también borra los datos.
 - Hot reload activo: cambios en `.py` recargan el backend, cambios en `.tsx/.ts` recargan el frontend.
-- Los datos de SQLite persisten en `./data/` entre sesiones (volume mount).
+- **DB local:** PostgreSQL corriendo en el service `db` de docker-compose, datos persistidos en el volume `pg_data`. La connection string vive en `docker-compose.yml`, no en `.env`.
+- Para abrir un shell de psql: `docker compose exec db psql -U yourwriter -d yourwriter`.
 
 **Ambientes:**
-| | Local | Railway (prod) |
-|---|---|---|
-| Cómo arranca | `bash dev.sh` → docker compose | auto-deploy desde push a `main` |
-| Backend | uvicorn `--reload`, source montado | uvicorn, source baked en imagen |
-| Frontend | vite dev HMR en :3000 | static files servidos por FastAPI |
-| DB | SQLite en `./data/` | PostgreSQL (Railway managed) |
-| Env vars | `.env` local | Variables de entorno en Railway |
+| | Local | Railway (prod) | Tests / CI |
+|---|---|---|---|
+| Cómo arranca | `bash dev.sh` → docker compose | auto-deploy desde push a `main` | `pytest backend/tests/` |
+| Backend | uvicorn `--reload`, source montado | uvicorn, source baked en imagen | — |
+| Frontend | vite dev HMR en :3000 | static files servidos por FastAPI | `npm run test`, `tsc --noEmit` |
+| DB | PostgreSQL en service `db` (volume `pg_data`) | PostgreSQL (Railway managed) | SQLite in-memory (`./test.db`) |
+| Env vars | `.env` local + `docker-compose.yml` | Variables de entorno en Railway | `DATABASE_URL` override en CI |
+
+**Por qué Postgres también en local (Sprint 6b Slice 0, 2026-04-08):**
+Antes corríamos SQLite local + PostgreSQL en prod. La asimetría iba a doler con Sprint 6b Slice 3 (LangGraph checkpointer + SSE streaming) que tiene gotchas conocidos en SQLite. Unificar el motor en runtime elimina toda una clase de bugs "anda en local, rompe en prod" sin costo significativo (un service más en el compose, ~30s al primer build). Tests siguen en SQLite por velocidad y porque testean lógica, no integración con el motor.
 
 ---
 
@@ -107,7 +112,7 @@ yourwriter/
 │       └── templates.py
 │
 └── data/
-    └── yourwriter.db        # SQLite file (generado en runtime)
+    # (vacío — Postgres corre en el service `db` del compose, datos en volume pg_data)
 ```
 
 ---

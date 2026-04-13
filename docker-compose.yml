@@ -1,4 +1,18 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: yourwriter
+      POSTGRES_PASSWORD: yourwriter
+      POSTGRES_DB: yourwriter
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yourwriter -d yourwriter"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: .
@@ -8,10 +22,13 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./agents:/app/agents
-      - ./data:/app/data
     env_file: .env
     environment:
       ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://yourwriter:yourwriter@db:5432/yourwriter
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend:
     build:
@@ -29,3 +46,4 @@ services:
 
 volumes:
   frontend_node_modules:
+  pg_data:

@@ -35,7 +35,24 @@ Tech Lead proposes task breakdown + agent assignments → Damian reviews (scope,
 - Commit shared contracts to `main` before agents start
 - Damian can add **guidance notes** per agent (pitfalls, patterns, references)
 
-Output: task list with scope, instructions, dependencies, parallel grouping.
+**Session Sizing — estimar antes de arrancar:**
+
+| Componente | Impacto |
+|---|---|
+| Overhead fijo (CLAUDE.md + system + tools) | ~6-8K tokens siempre |
+| Archivos a leer × tamaño | crece por archivo |
+| Código a escribir/modificar | crece por cambio |
+| Conversación (intercambios × profundidad) | crece con cada mensaje |
+
+Heurísticas:
+- Leer + modificar >3 archivos significativos = dos sesiones mínimo
+- Planning heavy (decisiones + docs) y build no van en la misma sesión
+- Si hay QA con Playwright, es la última tarea o su propia sesión
+- Sub-agentes = contexto fresco; delegarles tasks aislados libera el presupuesto principal
+
+**Regla:** Si el slice no cabe, partir el slice antes de arrancar — no empujar hasta que el contexto se degrada.
+
+Output: task list con scope, instrucciones, dependencias, agrupación paralela, **y estimación de sesiones necesarias**.
 
 ### 4. Build
 Launch agents (parallel where possible). Agents work on feature branches, write tests, stay scoped.
@@ -59,13 +76,20 @@ Merge to `main` → Claude runs QA with Playwright MCP (navigate, interact, scre
 |-------------|----------|
 | Algo sobre la relación con Damian, cómo colaborar, feedback de proceso general | `~/.claude/CLAUDE.md` (global) |
 | Algo sobre el proceso de desarrollo, principios, QA, git | `~/.claude/CLAUDE.md` (global) |
-| Algo sobre YourWriter: producto, contexto, decisiones de diseño | `CLAUDE.md` (este proyecto) |
+| Learnings técnicos, de proceso, patrones observados | Archivos de memoria (`~/.claude/projects/.../memory/`) |
+| Cambios estructurales al proyecto (nueva sección, nuevo doc, sprint pointer) | `CLAUDE.md` (este proyecto) — solo cambios estructurales, no learnings |
 | Patrones de área nuevos (frontend CSS, backend sessions) | `.agents/frontend.md` o `.agents/backend.md` |
 | Qué features quedaron funcionales, cambios de UX | `PRODUCT.md` |
 | Qué módulos/endpoints/modelos se agregaron o cambiaron | `ARCHITECTURE.md` |
 | Razonamiento detrás de decisiones de diseño | `LINEAGE.md` |
 
-- Actualizar "Nota para Claude" en `CLAUDE.md` del proyecto con learnings de sesión (técnicos, de proceso, humanos)
+**Checklist de cierre de sprint:**
+- [ ] `CLAUDE.md` < 5KB (`wc -c CLAUDE.md`)
+- [ ] No hay "Contexto de la última sesión" en `CLAUDE.md`
+- [ ] Learnings nuevos en memoria, no duplicados en `CLAUDE.md`
+- [ ] Entrada del sprint comprimida a 1 línea en Project Status
+- [ ] Sprint pointer actualizado a siguiente sprint
+
 - Archive `.comms/messages.md` si hay mensajes — mover a `.comms/archive/sprint-N.md`
 
 ## Artifacts
