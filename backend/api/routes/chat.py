@@ -258,6 +258,8 @@ async def studio_stream(
                     yield f"data: {json.dumps({'token': chunk})}\n\n"
 
             yield f"data: {json.dumps({'done': True})}\n\n"
+        except (ValueError, PermissionError) as exc:
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
         except RuntimeError as exc:
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
         except Exception:

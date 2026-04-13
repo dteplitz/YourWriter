@@ -7,12 +7,6 @@ class BriefRequest(BaseModel):
     message: str
 
 
-class StudioStreamRequest(BaseModel):
-    brief: "BriefResponse"
-    session_id: int | None = None
-    iteration_notes: str | None = None
-
-
 class BriefResponse(BaseModel):
     format: str
     tone: str
@@ -21,6 +15,12 @@ class BriefResponse(BaseModel):
     notes: str | None = None
     needs_clarification: bool = False
     clarification_question: str | None = None
+
+
+class StudioStreamRequest(BaseModel):
+    brief: BriefResponse
+    session_id: int | None = None
+    iteration_notes: str | None = None
 
 
 class PieceResponse(BaseModel):

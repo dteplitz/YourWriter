@@ -277,9 +277,13 @@ async def stream_studio_session(
             await db.commit()
             yield {"session_started": {"session_id": session_id}}
 
-        # Determine take number
+        # Ownership check + 404 for supplied session_id
         existing = await session_repository.get_session_with_takes(db, session_id)
-        take_number = (len(existing.takes) + 1) if existing else 1
+        if existing is None:
+            raise ValueError(f"Session {session_id} not found")
+        if existing.writer_id != writer.id:
+            raise PermissionError(f"Session {session_id} does not belong to this writer")
+        take_number = len(existing.takes) + 1
 
         take = await session_repository.create_take(
             db,

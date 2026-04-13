@@ -433,4 +433,29 @@ El schema definitivo (con `lifecycle` en lugar de `status`, valores reducidos, y
   - Mapear el frontend antes de cerrar el contrato del backend descubrió que el endpoint era stateless por take y que `brief.notes` se pisaba en cada iteración. Sin esto el contrato del Slice 1 hubiera nacido roto (D8, D9).
   - "Naming distinto entre capas vecinas" como técnica de design — pensar dos veces qué palabra pones en una columna cuando hay una capa adyacente que también usa la misma idea pero significa otra cosa (D6, D7).
   - Antes de aceptar "campo `status` con N estados", preguntar cuáles de esos estados son del **producto** y cuáles son del **runtime de otra cosa**. Probablemente hay que separarlos.
+
+---
+
+## Estado de ejecución (2026-04-13)
+
+### Slice 0 ✅ — mergeado a main (PR #11)
+- Postgres local en docker-compose, volume pg_data, .env.example, docs actualizados
+- `.gitattributes` con `*.sh eol=lf` (fix CRLF en Windows)
+
+### Slice 1 ✅ — PR #12 abierto, pendiente merge
+- `StudioSession` + `StudioTake` en DB, `session_repository.py` con lifecycle guarded
+- `stream_studio_session` crea sesión en primer call, yield `session_started`, crea take por call
+- `iteration_notes` separado de `brief.notes` (brief snapshot preservado)
+- Frontend: `sessionIdRef` persiste `session_id` entre takes
+- 24/24 tests verdes, tsc limpio, QA manual OK
+- `PiecesLibrary` confirmado como huérfano — scope Slice 4, no blocker
+
+### Próximo: Slice 2 — Post-sesión import flow
+**Antes de arrancar, resolver las open questions de la sección "Slice 2" de este doc.**
+Branch: `feat/sprint-6b-slice-2-import-flow`
+
+**Estado del código relevante para Slice 2:**
+- `advance_lifecycle(active → complete)` ya existe en `session_repository.py`
+- "Finalizar sesión" hoy hace `setStep('brief')` en `StudioPage.tsx` sin tocar lifecycle — Slice 2 lo convierte en trigger del import flow
+- D10 (`WriterIdentity.source`) pendiente de ratificar al inicio del planning
 - **Pendientes a resolver antes de Slice 3:** leer `agents/graphs/` y `agents/nodes/writing_nodes.py`.
