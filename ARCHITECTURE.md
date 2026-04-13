@@ -112,7 +112,7 @@ yourwriter/
 │       └── templates.py
 │
 └── data/
-    └── yourwriter.db        # SQLite file (generado en runtime)
+    # (vacío — Postgres corre en el service `db` del compose, datos en volume pg_data)
 ```
 
 ---

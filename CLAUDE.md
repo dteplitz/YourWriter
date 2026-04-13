@@ -10,7 +10,7 @@
 |------|---------|
 | Quién es Damian, la relación, cómo colaborar | `~/.claude/CLAUDE.md` (global) |
 | Proceso de desarrollo, way of work, principios | `~/.claude/CLAUDE.md` (global) |
-| QA con Playwright, git conventions | `~/.claude/CLAUDE.md` (global) |
+| QA con Playwright | `~/.claude/CLAUDE.md` (global) |
 | Contexto del producto YourWriter | Este archivo |
 | Tech stack, module boundaries, key concepts | Este archivo |
 | Estado del proyecto, sprint actual | Este archivo |
@@ -86,14 +86,14 @@ Seguir el proceso en `PROCESS.md`. El proceso general (sprint cycle, principios)
 ### Area-Specific Patterns
 Ver los templates de agentes — son la fuente de verdad para patrones de área:
 - Frontend (CSS layout, TypeScript, design system, animaciones): `.agents/frontend.md`
-- Backend (SQLite/sessions, auth, service pattern, server restart): `.agents/backend.md`
+- Backend (sessions, auth, service pattern, server restart): `.agents/backend.md`
 
 ---
 
 ## Tech Stack
 - **Backend**: Python 3.11+, FastAPI, uvicorn
 - **Frontend**: React 19, Vite, TypeScript
-- **Database**: SQLite local / PostgreSQL prod (SQLAlchemy + asyncpg)
+- **Database**: PostgreSQL (local + prod) via SQLAlchemy async + asyncpg. SQLite solo en tests.
 - **Agent Layer**: LangChain, LangGraph, Anthropic SDK
 - **Auth**: Email/password simple (JWT)
 
