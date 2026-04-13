@@ -1,0 +1,226 @@
+.session-import-page {
+  background: var(--bg-primary);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.session-import-shell {
+  width: min(920px, 100%);
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.session-import-step {
+  min-width: 160px;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.session-import-step--status {
+  text-align: right;
+}
+
+.session-import-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.session-import-eyebrow {
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.session-import-hero h2 {
+  font-size: 2rem;
+}
+
+.session-import-subtitle {
+  max-width: 680px;
+  color: var(--text-secondary);
+}
+
+.session-import-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+}
+
+.session-import-card--loading,
+.session-import-card--empty {
+  text-align: center;
+}
+
+.session-import-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.session-import-badge {
+  font-size: 0.72rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border: 1px solid rgba(124, 111, 247, 0.3);
+}
+
+.session-import-reasoning {
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.session-import-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.session-import-change {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.1rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+
+.session-import-change:hover {
+  border-color: var(--border-light);
+  transform: translateY(-1px);
+}
+
+.session-import-change--selected {
+  border-color: rgba(124, 111, 247, 0.55);
+  background: rgba(124, 111, 247, 0.08);
+}
+
+.session-import-change input {
+  margin-top: 0.25rem;
+  accent-color: var(--accent);
+}
+
+.session-import-change-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.session-import-change-topline {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.session-import-change-target {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.session-import-change-action {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+}
+
+.session-import-change-action--add {
+  color: var(--success);
+  background: rgba(74, 222, 128, 0.12);
+}
+
+.session-import-change-action--modify {
+  color: var(--warning);
+  background: rgba(250, 204, 21, 0.12);
+}
+
+.session-import-change-action--remove {
+  color: var(--danger);
+  background: rgba(224, 85, 85, 0.12);
+}
+
+.session-import-change-summary {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.session-import-change-reason {
+  color: var(--text-muted);
+  line-height: 1.6;
+  font-size: 0.88rem;
+}
+
+.session-import-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+}
+
+.session-import-selection {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.session-import-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .session-import-shell {
+    padding: 1.25rem 1rem 2rem;
+  }
+
+  .session-import-step {
+    min-width: 0;
+  }
+
+  .session-import-step--status {
+    text-align: left;
+  }
+
+  .session-import-hero h2 {
+    font-size: 1.6rem;
+  }
+
+  .session-import-card-header,
+  .session-import-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .session-import-actions {
+    width: 100%;
+  }
+
+  .session-import-actions .btn {
+    flex: 1;
+  }
+}

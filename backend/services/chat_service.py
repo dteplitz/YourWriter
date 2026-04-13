@@ -235,12 +235,20 @@ async def generate_brief(writer: Writer, message: str) -> BriefResponse:
 async def stream_studio_session(
     writer: Writer,
     brief: BriefResponse,
+    session_id: int | None = None,
+    iteration_notes: str | None = None,
 ) -> AsyncIterator[str | dict]:
     """Run the Studio writing pipeline for a brief and stream tokens.
 
     Does NOT load or save chat history — each Studio session starts fresh.
 
+    On the first call (session_id=None) a StudioSession is created and the
+    session_id is yielded as {"session_started": {"session_id": N}} before
+    the pipeline starts. On subsequent calls the existing session is reused
+    and a new StudioTake is linked to it.
+
     Yields:
+      - dict: {"session_started": {"session_id": N}} (first call only)
       - dict: phase events like {"phase": "outlining"}
       - str: text token from the refine stream
       - dict: final piece event {"piece": {...}} after the stream ends
@@ -255,6 +263,36 @@ async def stream_studio_session(
         studio_refine_node_stream,
     )
     from backend.db.database import async_session  # noqa: E402
+    from backend.db import session_repository  # noqa: E402
+
+    # --- Session + take bookkeeping (short-lived DB session before LLM calls) ---
+    async with async_session() as db:
+        if session_id is None:
+            studio_session = await session_repository.create_session(
+                db,
+                writer_id=writer.id,
+                brief_json=brief.model_dump(),
+            )
+            session_id = studio_session.id
+            await db.commit()
+            yield {"session_started": {"session_id": session_id}}
+
+        # Ownership check + 404 for supplied session_id
+        existing = await session_repository.get_session_with_takes(db, session_id)
+        if existing is None:
+            raise ValueError(f"Session {session_id} not found")
+        if existing.writer_id != writer.id:
+            raise PermissionError(f"Session {session_id} does not belong to this writer")
+        take_number = len(existing.takes) + 1
+
+        take = await session_repository.create_take(
+            db,
+            session_id=session_id,
+            take_number=take_number,
+            iteration_notes=iteration_notes,
+        )
+        take_id = take.id
+        await db.commit()
 
     # Load latest identity (no DB session held during LLM calls)
     identity_row: WriterIdentity | None = None
@@ -270,12 +308,15 @@ async def stream_studio_session(
     }
     identity_dict["purpose"] = writer.purpose
 
-    # Build the studio request from the brief
+    # Build the studio request from the brief.
+    # iteration_notes is kept separate from brief.notes (which is the original brief snapshot).
     studio_request = f"Write a {brief.format} with tone: {brief.tone}."
     if brief.word_limit:
         studio_request += f" Word limit: {brief.word_limit}."
     if brief.notes:
         studio_request += f" Notes: {brief.notes}"
+    if iteration_notes:
+        studio_request += f" Producer notes for this take: {iteration_notes}"
 
     state: dict = {
         "messages": [{"role": "user", "content": studio_request}],
@@ -322,7 +363,7 @@ async def stream_studio_session(
 
     word_count = len(content.split()) if content.strip() else 0
 
-    # Save piece in a short-lived session (never hold DB during LLM calls)
+    # Save piece + update take in short-lived sessions (never hold DB during LLM calls)
     async with async_session() as db:
         piece = WriterPiece(
             writer_id=writer.id,
@@ -332,8 +373,11 @@ async def stream_studio_session(
             word_count=word_count,
         )
         db.add(piece)
-        await db.commit()
+        await db.flush()
         await db.refresh(piece)
+
+        await session_repository.update_take_content(db, take_id, content, title)
+        await db.commit()
 
     yield {
         "piece": {

@@ -437,6 +437,85 @@ Return ONLY the refined content followed by the title line — no meta-commentar
 """
 
 # ---------------------------------------------------------------------------
+# Session Import - explicit post-session proposal (Sonnet)
+# ---------------------------------------------------------------------------
+
+SESSION_IMPORT_PROMPT = """\
+You are reviewing a completed Studio session to decide what, if anything, should \
+be imported into an AI writer's permanent general identity.
+
+This is an explicit post-session import flow, not the chat evolution pipeline.
+Your job is to look at the whole session and propose only durable lessons that \
+should persist beyond this one piece.
+
+**Current general identity:**
+{current_identity}
+
+**Original Studio brief:**
+{session_brief}
+
+**Session takes in chronological order:**
+{session_takes}
+
+---
+
+## Durable vs temporary
+
+- Propose a change only if the session reveals something durable about the \
+writer's long-term voice, emotional tendencies, themes, interests, memories, \
+constraints, or standing objectives.
+- Do NOT import one-off execution details from the brief just because the \
+writer followed them successfully in this session.
+- Do NOT restate the brief.
+- Returning zero changes is valid and often correct.
+- Prefer 0-4 small, incremental changes maximum.
+
+## Identity field formats
+
+- **emotions** - dict with string keys and numeric values 0.0-1.0
+- **personality** - dict with string keys and string values
+- **topics** - list of strings
+- **memories** - list of strings
+- **lifelong_objectives** - list of strings
+- **constraints** - dict with string keys and string values
+- **purpose** - single string
+
+## Instructions
+
+1. Use the current identity as the baseline.
+2. Review the full session, including iteration notes and how the piece evolved.
+3. Propose only changes that reflect durable learning from the session as a whole.
+4. Keep every change incremental, never a full rewrite of identity.
+5. For each change, explain the evidence from the session.
+
+## Output format
+
+Respond with ONLY a JSON object in this exact format:
+
+{{
+  "changes": [
+    {{
+      "field": "emotions",
+      "action": "modify",
+      "key": "<dict key>",
+      "old_value": <current value>,
+      "new_value": <new value>,
+      "reason": "<why this is durable>"
+    }},
+    {{
+      "field": "topics",
+      "action": "add",
+      "value": "<new topic>",
+      "reason": "<why this is durable>"
+    }}
+  ],
+  "overall_reasoning": "<1-3 sentence summary of what the writer learned from this session, or why nothing durable should be imported>"
+}}
+
+Return ONLY the JSON object.
+"""
+
+# ---------------------------------------------------------------------------
 # Constraints Parser — natural language → structured JSON
 # ---------------------------------------------------------------------------
 

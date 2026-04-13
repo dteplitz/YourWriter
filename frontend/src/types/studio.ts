@@ -1,3 +1,5 @@
+import type { Identity } from './writer';
+
 export interface Brief {
   format: string;
   tone: string;
@@ -29,9 +31,54 @@ export interface ToolResultEvent {
   summary: string;
 }
 
+export interface SessionImportChange {
+  field: string;
+  action: 'add' | 'modify' | 'remove';
+  key?: string | null;
+  old_value?: unknown;
+  new_value?: unknown;
+  value?: unknown;
+  reason: string;
+}
+
+export interface SessionImportProposalResponse {
+  session_id: number;
+  writer_id: number;
+  lifecycle: 'complete';
+  changes: SessionImportChange[];
+  reasoning: string;
+}
+
+export interface SessionImportRequest {
+  changes: SessionImportChange[];
+  reasoning: string;
+}
+
+export interface SessionImportResponse {
+  session_id: number;
+  writer_id: number;
+  lifecycle: 'imported';
+  imported_changes: SessionImportChange[];
+  reasoning: string;
+  identity: Identity;
+}
+
+export interface SessionSkipResponse {
+  session_id: number;
+  writer_id: number;
+  lifecycle: 'skipped';
+}
+
+export interface SessionImportFeedback {
+  status: 'imported' | 'skipped';
+  sessionId: number;
+  importedChanges?: SessionImportChange[];
+  reasoning?: string;
+}
+
 export interface SessionExperienceProps {
   writerId: string;
   brief: Brief;
   onPieceSaved?: (piece: Piece) => void;
-  onSessionEnd: () => void;
+  onSessionEnd: (sessionId: number | null) => void;
 }

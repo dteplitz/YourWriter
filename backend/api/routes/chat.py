@@ -14,7 +14,7 @@ from backend.db.database import async_session, get_db
 from backend.db.models import ChatMessage, MessageRole, User, WriterIdentity
 from backend.schemas.chat import ChatMessageCreate, ChatMessageResponse
 from backend.schemas.evolution import EvolutionDetectedEvent
-from backend.schemas.studio import BriefRequest, BriefResponse
+from backend.schemas.studio import BriefRequest, BriefResponse, StudioStreamRequest
 from backend.services.chat_service import (
     _load_history,
     generate_brief,
@@ -25,9 +25,6 @@ from backend.services.chat_service import (
 from backend.services.evolution_service import persist_evolution, run_evolution
 from backend.services.writer_service import get_writer
 
-
-class StudioStreamRequest(BaseModel):
-    brief: BriefResponse
 
 logger = logging.getLogger(__name__)
 
@@ -252,13 +249,17 @@ async def studio_stream(
 
     async def event_generator():
         try:
-            async for chunk in stream_studio_session(writer, brief):
+            async for chunk in stream_studio_session(
+                writer, brief, body.session_id, body.iteration_notes
+            ):
                 if isinstance(chunk, dict):
                     yield f"data: {json.dumps(chunk)}\n\n"
                 else:
                     yield f"data: {json.dumps({'token': chunk})}\n\n"
 
             yield f"data: {json.dumps({'done': True})}\n\n"
+        except (ValueError, PermissionError) as exc:
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
         except RuntimeError as exc:
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
         except Exception:

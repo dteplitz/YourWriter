@@ -433,4 +433,68 @@ El schema definitivo (con `lifecycle` en lugar de `status`, valores reducidos, y
   - Mapear el frontend antes de cerrar el contrato del backend descubrió que el endpoint era stateless por take y que `brief.notes` se pisaba en cada iteración. Sin esto el contrato del Slice 1 hubiera nacido roto (D8, D9).
   - "Naming distinto entre capas vecinas" como técnica de design — pensar dos veces qué palabra pones en una columna cuando hay una capa adyacente que también usa la misma idea pero significa otra cosa (D6, D7).
   - Antes de aceptar "campo `status` con N estados", preguntar cuáles de esos estados son del **producto** y cuáles son del **runtime de otra cosa**. Probablemente hay que separarlos.
-- **Pendientes a resolver antes de Slice 3:** leer `agents/graphs/` y `agents/nodes/writing_nodes.py`.
+
+---
+
+## Estado de ejecución (2026-04-13)
+
+### Slice 0 ✅ — mergeado a main (PR #11)
+- Postgres local en docker-compose, volume pg_data, .env.example, docs actualizados
+- `.gitattributes` con `*.sh eol=lf` (fix CRLF en Windows)
+
+### Slice 1 ✅ — PR #12 abierto, pendiente merge
+- `StudioSession` + `StudioTake` en DB, `session_repository.py` con lifecycle guarded
+- `stream_studio_session` crea sesión en primer call, yield `session_started`, crea take por call
+- `iteration_notes` separado de `brief.notes` (brief snapshot preservado)
+- Frontend: `sessionIdRef` persiste `session_id` entre takes
+- 24/24 tests verdes, tsc limpio, QA manual OK
+- `PiecesLibrary` confirmado como huérfano — scope Slice 4, no blocker
+
+### Próxima sesión — QA + commit + PR de Slice 2
+
+**Estado:** todo el código de Slice 2 está en el working tree sin commitear, sobre el branch `feat/sprint-6b-slice-1-session-entity`. Tests 32/32 verdes, tsc limpio. Falta QA manual del import flow y commit/PR.
+
+**Checklist de QA:**
+1. `bash dev.sh` — confirmar que levanta sin errores
+2. Login → crear/seleccionar writer → Studio → configurar brief → escribir un take → "Iterar" con notas → segundo take → "Finalizar sesión"
+3. Verificar que navega a `/studio/:writerId/import/:sessionId`
+4. Ver propuesta del LLM con checkboxes — deseleccionar alguno → "Importar"
+5. Verificar que vuelve al Artist Profile con banner de feedback
+6. Verificar que `ConfigPanel` muestra la identidad actualizada
+7. Repetir el flujo pero con "Skipear" en lugar de "Importar"
+8. Flujo de propuesta vacía: si el LLM no propone nada, debe aparecer el estado "Sin aprendizaje durable" con botón "Continuar"
+
+**Antes de commitear:**
+- Descartar `PLAN_SPRINT6B_SLICE2.md` y `PLAN_SPRINT6B_SLICE3.md` (son artefactos de planificación, el plan vive en SPRINT6B.md)
+- Revisar si hay dead code o imports huérfanos
+
+**Estructura del commit/PR:**
+- Commitear todo como Slice 2 sobre el branch actual
+- El PR #12 cubre Slice 1+2 juntos (el sprint lo prevé así: "Slice 1 + 2 cerrados como un PR único antes de meter 3+4")
+
+### Slice 2 — fase 1 backend ✅ (2026-04-13)
+- Router nuevo `backend/api/routes/sessions.py` con `POST /sessions/{id}/import-proposal`, `POST /sessions/{id}/import`, `POST /sessions/{id}/skip`
+- `session_import_service.py` nuevo: carga contexto de sesión, genera proposal con structured output, aplica selección y skipea
+- Reuso real del patrón de `evolution_nodes.py`: `ChatAnthropic.with_structured_output(...)`, sin parsing manual
+- `evolution_service.py` ahora expone `persist_identity_changes()` como helper compartido para `WriterIdentity` + `EvolutionLog`
+- Lifecycle validado: `active → complete → imported/skipped`
+- Tests backend verdes (`pytest backend/tests -q`) y QA manual backend OK en localhost:
+  - proposal sobre sesión `active` la mueve a `complete`
+  - import crea nueva `WriterIdentity`, agrega `EvolutionLog` y cierra en `imported`
+  - skip no crea identidad nueva y cierra en `skipped`
+  - sesiones terminales devuelven `409` si se intenta reprocesarlas
+- D10 se ratificó en sentido negativo para este thread: **no** se agregó `WriterIdentity.source`; el origen queda trazado en `EvolutionLog.reason`
+
+### Slice 2 — fase 2 frontend + integración ✅ (2026-04-13)
+- Ruta nueva `/studio/:writerId/import/:sessionId`
+- `Finalizar sesión` ahora navega al import flow usando el `session_id` mantenido por `SessionExperience`
+- `SessionImportPage` nueva: carga proposal, renderiza checkboxes, soporta import parcial, skip explícito y propuesta vacía
+- `WriterPage` muestra banner transitorio al volver desde el import flow, cerrando el loop visible Studio → identidad
+- Tests frontend verdes (`npm test`) y build frontend verde (`npm run build`)
+- QA manual end-to-end desde UI: **OK en localhost**. Verificado con Playwright headless sobre la app levantada manualmente: registro, creación de writer, sesión de Studio, import parcial y skip explícito
+
+### Próximo inmediato: Slice 3 — checkpointer
+
+**Fuera de este thread:**
+- QA manual end-to-end real en navegador del flow completo
+- trabajo de checkpointer / resumibilidad técnica

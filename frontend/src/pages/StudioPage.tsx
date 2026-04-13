@@ -75,8 +75,13 @@ export default function StudioPage() {
         <SessionExperience
           writerId={writerId}
           brief={brief}
-
-          onSessionEnd={() => setStep('brief')}
+          onSessionEnd={(sessionId) => {
+            if (sessionId) {
+              navigate(`/studio/${writerId}/import/${sessionId}`, { replace: true });
+              return;
+            }
+            navigate('/writer/' + writerId, { replace: true });
+          }}
         />
       )}
     </div>

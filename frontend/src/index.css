@@ -531,6 +531,54 @@ a {
   flex-shrink: 0;
 }
 
+.writer-session-banner {
+  margin: 1rem 1.5rem 0;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.writer-session-banner--imported {
+  background: rgba(74, 222, 128, 0.08);
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+.writer-session-banner--skipped {
+  background: rgba(250, 204, 21, 0.08);
+  border-color: rgba(250, 204, 21, 0.25);
+}
+
+.writer-session-banner-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: var(--text-secondary);
+}
+
+.writer-session-banner-copy strong {
+  color: var(--text-primary);
+}
+
+.writer-session-banner-dismiss {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 999px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.writer-session-banner-dismiss:hover {
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
 /* Below the fold: Chat + Evolution */
 .writer-below-fold {
   display: flex;
@@ -1144,6 +1192,10 @@ a {
 
   .writer-rpg-strip--visible {
     max-height: 80px; /* allow wrapping on small screens */
+  }
+
+  .writer-session-banner {
+    margin: 0.75rem 1rem 0;
   }
 }
 

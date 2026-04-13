@@ -17,6 +17,12 @@ class BriefResponse(BaseModel):
     clarification_question: str | None = None
 
 
+class StudioStreamRequest(BaseModel):
+    brief: BriefResponse
+    session_id: int | None = None
+    iteration_notes: str | None = None
+
+
 class PieceResponse(BaseModel):
     id: int
     writer_id: int

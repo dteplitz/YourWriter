@@ -9,6 +9,8 @@ Two responsibilities:
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -85,6 +87,32 @@ async def persist_evolution(
     WriterIdentity
         The newly created identity row (refreshed from DB).
     """
+    return await persist_identity_changes(
+        db=db,
+        writer_id=writer_id,
+        changes=result.changes,
+        updated_identity=result.updated_identity,
+    )
+
+
+def _compose_log_reason(reason: str, reason_prefix: str | None = None) -> str:
+    """Attach an optional source prefix without losing the human-readable reason."""
+    if reason_prefix and reason:
+        return f"{reason_prefix} {reason}"
+    if reason_prefix:
+        return reason_prefix
+    return reason
+
+
+async def persist_identity_changes(
+    db: AsyncSession,
+    writer_id: int,
+    changes: list[dict[str, Any]],
+    updated_identity: dict[str, Any],
+    *,
+    reason_prefix: str | None = None,
+) -> WriterIdentity:
+    """Persist an identity version bump plus matching EvolutionLog rows."""
     # Load the current (latest) version to get the version number and fallback fields
     query = (
         select(WriterIdentity)
@@ -95,27 +123,25 @@ async def persist_evolution(
     row = await db.execute(query)
     current = row.scalar_one()
 
-    identity = result.updated_identity
-
     new_identity = WriterIdentity(
         writer_id=writer_id,
-        personality=identity.get("personality", current.personality),
-        emotions=identity.get("emotions", current.emotions),
-        memories=identity.get("memories", current.memories),
-        topics=identity.get("topics", current.topics),
-        constraints=identity.get("constraints", current.constraints),
-        lifelong_objectives=identity.get("lifelong_objectives", current.lifelong_objectives),
+        personality=updated_identity.get("personality", current.personality),
+        emotions=updated_identity.get("emotions", current.emotions),
+        memories=updated_identity.get("memories", current.memories),
+        topics=updated_identity.get("topics", current.topics),
+        constraints=updated_identity.get("constraints", current.constraints),
+        lifelong_objectives=updated_identity.get("lifelong_objectives", current.lifelong_objectives),
         version=current.version + 1,
     )
     db.add(new_identity)
 
-    for change in result.changes:
+    for change in changes:
         log = EvolutionLog(
             writer_id=writer_id,
             field_changed=change.get("field", ""),
             old_value=str(change.get("old_value", change.get("value", ""))),
             new_value=str(change.get("new_value", change.get("value", ""))),
-            reason=change.get("reason", ""),
+            reason=_compose_log_reason(change.get("reason", ""), reason_prefix),
         )
         db.add(log)
 

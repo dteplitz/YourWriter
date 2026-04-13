@@ -1,7 +1,7 @@
 # YourWriter — Arquitectura Técnica
 
 *Documento vivo. Se actualiza al final de cada sprint con lo que fue construido o modificado.*
-*Última actualización: 2026-04-07 — notas técnicas reorganizadas tras research del ecosistema Lang. Para el contexto completo de decisiones sobre LangChain/LangGraph/LangMem, ver `LANG_PLAYBOOK.md`.*
+*Última actualización: 2026-04-13 — Sprint 6b Slice 2 completo (post-sesión import backend + frontend + integración visible) documentado. Para el contexto completo de decisiones sobre LangChain/LangGraph/LangMem, ver `LANG_PLAYBOOK.md`.*
 
 ---
 
@@ -64,7 +64,7 @@ Antes corríamos SQLite local + PostgreSQL en prod. La asimetría iba a doler co
 yourwriter/
 ├── backend/
 │   ├── api/
-│   │   ├── routes/          # FastAPI routers (auth, writers, identity, chat, evolution)
+│   │   ├── routes/          # FastAPI routers (auth, writers, identity, chat, evolution, sessions)
 │   │   └── deps.py          # get_current_user dependency
 │   ├── auth/
 │   │   └── auth.py          # JWT creation + validation
@@ -74,24 +74,27 @@ yourwriter/
 │   ├── schemas/
 │   │   ├── ...              # Pydantic schemas existentes
 │   │   ├── studio.py        # BriefRequest, BriefResponse, PieceResponse (Sprint 5)
-│   │   └── evolution.py     # EvolutionEvent, EvolutionResult Pydantic schemas (Sprint 6a)
-│   └── services/            # Business logic (writer_service, chat_service, user_service)
-│       └── evolution_service.py  # run_evolution() + persist_evolution() (Sprint 6a)
+│   │   ├── evolution.py     # EvolutionEvent, EvolutionResult Pydantic schemas (Sprint 6a)
+│   │   └── session.py       # Import proposal/import/skip contracts (Sprint 6b Slice 2 backend)
+│   └── services/            # Business logic (writer_service, chat_service, user_service, import flow)
+│       ├── evolution_service.py     # run_evolution() + shared identity persistence helper
+│       └── session_import_service.py # load session context → proposal → import → skip
 │
 ├── frontend/src/
 │   ├── api/
 │   │   └── client.ts        # Todas las llamadas al backend (única fuente de verdad)
 │   ├── components/          # Componentes reutilizables
-│   ├── pages/               # Páginas (LoginPage, DashboardPage, WriterPage, StudioPage)
+│   ├── pages/               # Páginas (LoginPage, DashboardPage, WriterPage, StudioPage, SessionImportPage)
 │   ├── stores/              # Zustand stores (authStore, writerStore)
 │   ├── types/               # TypeScript types
 │   │   ├── index.ts         # Re-exports
 │   │   ├── writer.ts        # Writer, Identity, Constraints
-│   │   └── studio.ts        # Brief, Piece, ToolUseEvent, ToolResultEvent (contrato canónico)
+│   │   └── studio.ts        # Brief + Studio SSE types + post-session import contracts
 │   ├── index.css            # Design system: variables CSS, base styles, WriterPage layout
 │   ├── config-panel.css     # Estilos del Artist Profile / character sheet
 │   ├── writing.css          # Estilos del Studio (Sprint 5)
-│   └── session.css          # Estilos de la sesión activa (Sprint 5)
+│   ├── session.css          # Estilos de la sesión activa (Sprint 5)
+│   └── import-flow.css      # Estilos del post-session import flow (Sprint 6b Slice 2)
 │
 ├── agents/
 │   ├── graphs/
@@ -105,7 +108,7 @@ yourwriter/
 │   │   ├── memory.py        # Dict en memoria (no persiste a DB)
 │   │   └── constraints.py
 │   ├── prompts/
-│   │   └── system.py        # System prompts (incluye BRIEF_GENERATION_PROMPT, STUDIO_REFINE_PROMPT)
+│   │   └── system.py        # System prompts (incluye BRIEF_GENERATION_PROMPT, STUDIO_REFINE_PROMPT, SESSION_IMPORT_PROMPT)
 │   └── evolution/
 │       ├── identity.py      # Dataclass Identity con to_dict/from_dict/to_prompt_string
 │       ├── diff.py          # Lógica de diff de identidad
@@ -187,7 +190,28 @@ word_count      int
 created_at
 ```
 
-*Sprint 6b agregará `session_config JSON` para guardar el fork de identidad de la sesión y permitir import post-sesión.*
+**`studio_sessions`** ← Sprint 6b Slice 1
+```
+id              PK
+writer_id       FK → writers (cascade delete)
+brief_json      JSON snapshot del brief original
+lifecycle       string   active | complete | imported | skipped | abandoned
+created_at
+updated_at
+```
+
+**`studio_takes`** ← Sprint 6b Slice 1
+```
+id              PK
+session_id      FK → studio_sessions (cascade delete)
+take_number     int
+iteration_notes nullable
+content         text
+title           nullable
+created_at
+```
+
+Slice 2 backend no agregó columnas nuevas de identidad: el origen del import post-sesión queda trazado hoy en `evolution_logs.reason` con el prefijo `[post_session_import session_id=...]`.
 
 ### Patrón crítico de sesiones SQLite
 
@@ -241,7 +265,14 @@ POST /chat/{id}/message          body: {content}  → ChatMessageResponse (201) 
 POST /chat/{id}/message/stream   body: {content}  → SSE stream
 GET  /chat/{id}/history                           → list[ChatMessageResponse]
 POST /chat/{id}/brief            body: {message}  → BriefResponse             [Sprint 5]
-POST /chat/{id}/studio/stream    body: {brief}    → SSE stream                [Sprint 5]
+POST /chat/{id}/studio/stream    body: {brief, session_id?, iteration_notes?} → SSE stream
+```
+
+### Sessions — `/api/sessions` ← Sprint 6b Slice 2 backend
+```
+POST /sessions/{id}/import-proposal              → SessionImportProposalResponse
+POST /sessions/{id}/import        body: {changes, reasoning} → SessionImportResponse
+POST /sessions/{id}/skip                          → SessionSkipResponse
 ```
 
 ### SSE Event types — chat stream
@@ -260,6 +291,7 @@ Los eventos de evolución se emiten **después** del `done`. El stream permanece
 
 ### SSE Event types — studio/stream ← Sprint 5
 ```json
+{"session_started": {"session_id": 123}}
 {"token": "text chunk"}
 {"phase": "outlining" | "drafting" | "refining"}
 {"tool_use": {"name": "web_search", "display_name": "Buscando", "query": "..."}}
@@ -281,11 +313,26 @@ Los eventos de evolución se emiten **después** del `done`. El stream permanece
 | `stream_studio_session()` | Studio con research → outline → draft → refine | `POST /chat/{id}/studio/stream` |
 
 **`stream_studio_session()` NO usa el grafo compilado.** Orquesta manualmente:
-1. `research_node_stream()` → yielda tool_use/tool_result, acumula search_results
-2. `outline_node(state)` → genera outline
-3. `draft_node(state)` → genera draft
-4. `studio_refine_node_stream(state)` → streama tokens + parsea `---TITLE: <title>---` al final
-5. Guarda `WriterPiece` en sesión corta → yielda evento `{"piece": {...}}`
+1. Si no viene `session_id`, crea `StudioSession` y yielda `session_started`
+2. Crea `StudioTake` para la llamada actual y persiste `iteration_notes`
+3. `research_node_stream()` → yielda tool_use/tool_result, acumula search_results
+4. `outline_node(state)` → genera outline
+5. `draft_node(state)` → genera draft
+6. `studio_refine_node_stream(state)` → streama tokens + parsea `---TITLE: <title>---` al final
+7. Guarda `WriterPiece` + actualiza `StudioTake` en sesión corta → yielda evento `{"piece": {...}}`
+
+### Session import flow ← Sprint 6b Slice 2 backend
+
+- `session_import_service.py` carga `StudioSession` + `StudioTake[]` + identidad actual en una sesión DB corta, validando ownership.
+- `POST /sessions/{id}/import-proposal` mueve `active → complete` si hace falta y llama a Claude con `ChatAnthropic.with_structured_output(SessionImportPlan)`.
+- El prompt `SESSION_IMPORT_PROMPT` recibe identidad general actual, `brief_json` original y todos los takes en orden (con `iteration_notes`, `title`, `content`).
+- `POST /sessions/{id}/import` aplica solo los cambios seleccionados usando `apply_node()` de `evolution_nodes.py` y persiste la nueva `WriterIdentity` vía `persist_identity_changes()`.
+- `POST /sessions/{id}/skip` exige `lifecycle = complete` y transiciona a `skipped` sin crear identidad nueva.
+- La trazabilidad de origen queda en `evolution_logs.reason` con el prefijo `[post_session_import session_id=...]`, sin abrir columnas nuevas en `writer_identities` en este slice.
+- Frontend:
+  - `SessionExperience` conserva el `session_id` de la sesión activa y `Finalizar sesión` navega a `/studio/:writerId/import/:sessionId`.
+  - `SessionImportPage` llama `POST /sessions/{id}/import-proposal`, renderiza la propuesta con checkboxes y deja importar un subset o skipear explícitamente.
+  - `WriterPage` consume `location.state.sessionImportFeedback` para mostrar un banner transitorio al volver desde el import flow.
 
 ### Grafos compilados activos
 
@@ -354,6 +401,7 @@ A partir del segundo turno del mismo writer, Anthropic reusa el KV-cache del pre
 /                   → DashboardPage (protegida)
 /writer/:id         → WriterPage (protegida)
 /studio/:writerId   → StudioPage (protegida)  ← Sprint 5
+/studio/:writerId/import/:sessionId → SessionImportPage (protegida) ← Sprint 6b Slice 2
 ```
 
 ### Stores (Zustand)
@@ -395,7 +443,8 @@ Estilos por área en archivos separados (no en `index.css`):
 | `WriterCard` | Card en el dashboard |
 | `CreateWriterModal` | Modal de creación de writer |
 | `BriefSetup` | Brief en 4 estados: input → loading → preview → clarifying. Header con nombre+purpose del writer. |
-| `SessionExperience` | Sesión activa: stream + phase pills con `LOADING_TIPS` rotativos (cada 4s) + tool use pill + artifact |
+| `SessionExperience` | Sesión activa: stream + phase pills con `LOADING_TIPS` rotativos (cada 4s) + tool use pill + artifact + navegación al import flow al finalizar |
+| `SessionImportPage` | Pantalla separada de revisión post-sesión: carga proposal, renderiza checkboxes, CTA Importar / Skipear, maneja propuesta vacía |
 | `WritingArtifact` | Documento final: título, formato badge, copy, Iterar/Finalizar |
 | `IterationInput` | Textarea de notas del productor, relanza el pipeline |
 | `PiecesLibrary` | Discografía del writer — lista expandible con fechas en español |
@@ -419,6 +468,8 @@ writer-page (overflow-y: auto)
 ```
 
 `WriterPage` usa un scroll event listener sobre `pageRef` para detectar cuando el hero scroll fuera de vista y activar el `writer-rpg-strip`. `ConfigPanel` recibe `onIdentityLoaded` callback para que WriterPage tenga los datos de identidad disponibles para el strip.
+
+`WriterPage` también escucha `location.state.sessionImportFeedback` al volver desde el import flow. Copia ese estado a un banner local dismissible y luego limpia el `location.state` con `replace` para que el mensaje no reaparezca en refresh/back.
 
 **Scroll fix (Sprint UX):** Tres partes necesarias para que el scroll arranque en la posición correcta:
 1. `overflow-anchor: none` en `.writer-page` — deshabilita el scroll anchoring de Chrome. Sin esto, cuando ConfigPanel crece al cargar la identidad (~400ms), Chrome re-scrollea automáticamente para mantener el chat visible, bypaseando JavaScript.

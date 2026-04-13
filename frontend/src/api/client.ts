@@ -10,7 +10,16 @@ import type {
   EvolutionEntry,
   EvolutionDetectedEvent,
 } from '../types';
-import type { Brief, Piece, ToolUseEvent, ToolResultEvent } from '../types/studio';
+import type {
+  Brief,
+  Piece,
+  ToolUseEvent,
+  ToolResultEvent,
+  SessionImportProposalResponse,
+  SessionImportRequest,
+  SessionImportResponse,
+  SessionSkipResponse,
+} from '../types/studio';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
 
@@ -238,6 +247,35 @@ export async function getPieces(writerId: string): Promise<Piece[]> {
   return response.json();
 }
 
+export async function createSessionImportProposal(
+  sessionId: number
+): Promise<SessionImportProposalResponse> {
+  const response = await fetchWithAuth(`/sessions/${sessionId}/import-proposal`, {
+    method: 'POST',
+  });
+  return response.json();
+}
+
+export async function importSessionChanges(
+  sessionId: number,
+  body: SessionImportRequest
+): Promise<SessionImportResponse> {
+  const response = await fetchWithAuth(`/sessions/${sessionId}/import`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
+export async function skipSessionImport(
+  sessionId: number
+): Promise<SessionSkipResponse> {
+  const response = await fetchWithAuth(`/sessions/${sessionId}/skip`, {
+    method: 'POST',
+  });
+  return response.json();
+}
+
 
 export async function sendStudioStream(
   writerId: string,
@@ -247,6 +285,9 @@ export async function sendStudioStream(
   onToolUse?: (event: ToolUseEvent) => void,
   onToolResult?: (event: ToolResultEvent) => void,
   onPiece?: (piece: Piece) => void,
+  onSessionStarted?: (sessionId: number) => void,
+  sessionId?: number,
+  iterationNotes?: string,
 ): Promise<void> {
   const token = localStorage.getItem('token');
   const headers: Record<string, string> = {
@@ -256,10 +297,14 @@ export async function sendStudioStream(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const body: Record<string, unknown> = { brief };
+  if (sessionId !== undefined) body.session_id = sessionId;
+  if (iterationNotes !== undefined) body.iteration_notes = iterationNotes;
+
   const response = await fetch(`${API_BASE}/chat/${writerId}/studio/stream`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ brief }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -297,6 +342,9 @@ export async function sendStudioStream(
       }
       if (data.tool_result && onToolResult) {
         onToolResult(data.tool_result as ToolResultEvent);
+      }
+      if (data.session_started && onSessionStarted) {
+        onSessionStarted(data.session_started.session_id as number);
       }
       if (data.piece && onPiece) {
         onPiece(data.piece as Piece);

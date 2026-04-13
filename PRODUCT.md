@@ -1,8 +1,8 @@
 # YourWriter — Estado Funcional del Producto
 
 *Documento vivo. Se actualiza al final de cada sprint con lo que quedó funcional.*
-*Última actualización: 2026-04-07 — roadmap reorganizado tras research del ecosistema Lang.*
-*Próximo: Sprint Lang Refresh (refactor técnico fundacional, sin cambios funcionales). Ver `SPRINT_LANG_REFRESH.md` y `LANG_PLAYBOOK.md`.*
+*Última actualización: 2026-04-13 — Sprint 6b Slice 2 frontend + integración visible Studio -> identidad.*
+*Próximo: Sprint 6b Slice 3 (checkpointer / resumibilidad técnica). Ver `SPRINT6B.md`.*
 
 ---
 
@@ -83,6 +83,17 @@ Se accede vía botón "Studio →" desde el ChatPanel. El Studio es una vista co
 
 5. **Discografía** — las piezas se acumulan como historial del writer. Expandibles, con fecha relativa en español.
 
+6. **Post-session import** ← Sprint 6b Slice 2
+
+Cuando el usuario hace click en **"Finalizar sesión"**, el Studio no vuelve directo al Artist Profile. Primero entra en una pantalla separada de revisión (`/studio/:writerId/import/:sessionId`) donde el sistema propone qué cambios de la sesión podrían pasar al General stats del writer.
+
+**Flow:**
+- El backend cierra la sesión en `complete` y genera una propuesta estructurada usando la identidad actual + brief original + todos los takes.
+- El usuario revisa los cambios con checkboxes y puede importar todos, importar solo una parte o skipear explícitamente.
+- Si la propuesta viene vacía, la UI lo dice de forma explícita y ofrece un único CTA para continuar.
+- Al volver al Writer Page aparece un banner claro confirmando si la sesión evolucionó al writer o si se cerró sin importar cambios.
+- La identidad refrescada y el EvolutionFeed vuelven a mostrar el efecto visible del loop Studio -> identidad.
+
 ### Identity Evolution via Chat ← Sprint 6a
 
 Cuando el usuario moldea al writer a través del chat — pide enfoques, refuerza rasgos, repite patrones de estilo — el sistema detecta esas señales y propone cambios graduales a la identidad.
@@ -113,7 +124,7 @@ El Studio usa `web_search_20250305` (herramienta built-in de Anthropic SDK ≥0.
 | Feature | Sprint |
 |---------|--------|
 | Refactor técnico del agent layer (LangChain 1.x, prompt caching, structured output, modelos en config) | Sprint Lang Refresh (próximo, sin impacto funcional) |
-| Session snapshot + import post-sesión (vía LangGraph checkpointer + Store) | Sprint 6b |
+| Session snapshot resumable (vía LangGraph checkpointer + Store) | Sprint 6b Slice 3 |
 | Writer initialization flow (GRRM-style) | Sprint 6b |
 | Tracing y evals automáticos del evolution pipeline (LangSmith + LLM-as-judge) | Sprint 6c |
 | Memory System (memoria episódica persistente, vía LangMem) | Sprint 7 |
@@ -140,7 +151,9 @@ El Studio usa `web_search_20250305` (herramienta built-in de Anthropic SDK ≥0.
 9. Click "Studio →" → va directo al Studio (sin transición animada)
 10. Studio: Brief Setup (con header nombre+purpose) → sesión activa (fases + loading tips + tool use) → artefacto
 11. Artefacto: copiar / iterar con notas / finalizar sesión
-12. Discografía: ver todas las piezas del writer
+12. Finalizar sesión → import flow separado con propuesta + checkboxes
+13. Importar o skipear → volver al Writer Page con feedback claro y la identidad refrescada
+14. Discografía: ver todas las piezas del writer
 ```
 
 ---
