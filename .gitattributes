@@ -1,0 +1,5 @@
+# Ensure shell scripts always use LF (never CRLF) regardless of OS
+*.sh text eol=lf
+
+# Default: auto-normalize everything else
+* text=auto
