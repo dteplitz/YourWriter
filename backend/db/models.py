@@ -7,10 +7,10 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Integer,
+    JSON,
     String,
     Text,
 )
-from sqlalchemy.dialects.sqlite import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.db.database import Base
@@ -54,6 +54,9 @@ class Writer(Base):
     )
     pieces: Mapped[list["WriterPiece"]] = relationship(
         "WriterPiece", back_populates="writer", cascade="all, delete-orphan"
+    )
+    studio_sessions: Mapped[list["StudioSession"]] = relationship(
+        "StudioSession", back_populates="writer", cascade="all, delete-orphan"
     )
 
 
@@ -118,3 +121,35 @@ class EvolutionLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     writer: Mapped["Writer"] = relationship("Writer", back_populates="evolution_logs")
+
+
+class StudioSession(Base):
+    __tablename__ = "studio_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    writer_id: Mapped[int] = mapped_column(ForeignKey("writers.id", ondelete="CASCADE"), nullable=False)
+    brief_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    lifecycle: Mapped[str] = mapped_column(String(50), nullable=False, default="active")
+    # active | complete | imported | skipped | abandoned
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+    writer: Mapped["Writer"] = relationship("Writer", back_populates="studio_sessions")
+    takes: Mapped[list["StudioTake"]] = relationship(
+        "StudioTake", back_populates="session", cascade="all, delete-orphan",
+        order_by="StudioTake.take_number",
+    )
+
+
+class StudioTake(Base):
+    __tablename__ = "studio_takes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("studio_sessions.id", ondelete="CASCADE"), nullable=False)
+    take_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    iteration_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    session: Mapped["StudioSession"] = relationship("StudioSession", back_populates="takes")

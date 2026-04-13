@@ -38,6 +38,7 @@ export default function SessionExperience({
   const streamedTextRef = useRef('');
   const hasLaunchedRef = useRef(false);
   const pieceReceivedRef = useRef(false);
+  const sessionIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (hasLaunchedRef.current) return;
@@ -53,7 +54,7 @@ export default function SessionExperience({
     return () => clearInterval(interval);
   }, [streamedText]);
 
-  const launchStream = async (notes?: string) => {
+  const launchStream = async (iterationNotes?: string) => {
     setSessionState('streaming');
     setStreamedText('');
     streamedTextRef.current = '';
@@ -63,14 +64,10 @@ export default function SessionExperience({
     setError(null);
     setTipIndex(0);
 
-    const briefWithNotes = notes
-      ? { ...brief, notes: notes }
-      : brief;
-
     try {
       await api.sendStudioStream(
         writerId,
-        briefWithNotes,
+        brief,
         (token) => {
           streamedTextRef.current += token;
           setStreamedText(streamedTextRef.current);
@@ -91,6 +88,11 @@ export default function SessionExperience({
           onPieceSaved?.(piece);
           setSessionState('artifact');
         },
+        (newSessionId) => {
+          sessionIdRef.current = newSessionId;
+        },
+        sessionIdRef.current ?? undefined,
+        iterationNotes,
       );
 
       // If stream completed without emitting a piece event, surface what we have
@@ -107,6 +109,8 @@ export default function SessionExperience({
     setCurrentPiece(null);
     launchStream(notes || undefined);
   };
+
+
 
   // Scroll to IterationInput (the textarea is right below the artifact)
   const iterationInputRef = useRef<HTMLDivElement>(null);

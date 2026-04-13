@@ -7,6 +7,12 @@ class BriefRequest(BaseModel):
     message: str
 
 
+class StudioStreamRequest(BaseModel):
+    brief: "BriefResponse"
+    session_id: int | None = None
+    iteration_notes: str | None = None
+
+
 class BriefResponse(BaseModel):
     format: str
     tone: str
