@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from agents.graphs.studio_graph import setup_studio_checkpointer
 from backend.api.router import api_router
 from backend.config import settings
 from backend.db.database import init_db
@@ -18,6 +19,7 @@ from backend.db.database import init_db
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan: initialise the database on startup."""
     await init_db()
+    await setup_studio_checkpointer()
     yield
 
 

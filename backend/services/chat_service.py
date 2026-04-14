@@ -1,8 +1,8 @@
-"""Chat service — bridges the backend API with the LangGraph agent layer."""
+"""Chat service â€” bridges the backend API with the LangGraph agent layer."""
 
 import os
-import re
 from collections.abc import AsyncIterator
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -59,7 +59,7 @@ async def invoke_writer_agent(
 ) -> str:
     """Invoke the writer agent in conversational (Artist Profile) mode.
 
-    Always uses the chat path — the writing pipeline is never triggered
+    Always uses the chat path â€” the writing pipeline is never triggered
     from the Artist Profile chat.
 
     Raises RuntimeError if ANTHROPIC_API_KEY is not set.
@@ -98,7 +98,7 @@ async def invoke_writer_agent(
         "constraints": identity_dict.get("constraints", {}),
     }
 
-    # Always conversational — no intent detection, no writing pipeline
+    # Always conversational â€” no intent detection, no writing pipeline
     result = await chat_node(state)
 
     # Extract the last assistant message
@@ -116,7 +116,7 @@ async def stream_writer_agent(
 ) -> AsyncIterator[str | dict]:
     """Stream the writer agent response as text chunks (Artist Profile chat).
 
-    Always uses the conversational path — the writing pipeline is never
+    Always uses the conversational path â€” the writing pipeline is never
     triggered from the Artist Profile chat.
 
     Manages its own short-lived DB session for loading history so the
@@ -159,7 +159,7 @@ async def stream_writer_agent(
         "constraints": identity_dict.get("constraints", {}),
     }
 
-    # Always conversational — no intent detection, stream directly
+    # Always conversational â€” no intent detection, stream directly
     async for chunk in chat_node_stream(state):
         yield chunk
 
@@ -232,6 +232,93 @@ async def generate_brief(writer: Writer, message: str) -> BriefResponse:
         )
 
 
+def _build_studio_request(brief: BriefResponse, iteration_notes: str | None = None) -> str:
+    """Build the Studio request text that feeds the writing pipeline."""
+    studio_request = f"Write a {brief.format} with tone: {brief.tone}."
+    if brief.word_limit:
+        studio_request += f" Word limit: {brief.word_limit}."
+    if brief.notes:
+        studio_request += f" Notes: {brief.notes}"
+    if iteration_notes:
+        studio_request += f" Producer notes for this take: {iteration_notes}"
+    return studio_request
+
+
+def _build_studio_graph_input(
+    *,
+    writer: Writer,
+    brief: BriefResponse,
+    identity: dict[str, Any],
+    iteration_notes: str | None,
+    take_id: int,
+    take_number: int,
+) -> dict[str, Any]:
+    """Create the initial Studio graph state for a new take."""
+    return {
+        "writer_id": writer.id,
+        "writer_name": writer.name,
+        "identity": identity,
+        "brief": brief.model_dump(),
+        "iteration_notes": iteration_notes,
+        "studio_request": _build_studio_request(brief, iteration_notes),
+        "take_id": take_id,
+        "take_number": take_number,
+    }
+
+
+def _snapshot_has_pending_work(snapshot: Any) -> bool:
+    """Return True when the Studio graph has unfinished nodes for this thread."""
+    return bool(getattr(snapshot, "next", ()))
+
+
+def _snapshot_has_piece_output(snapshot: Any) -> bool:
+    """Return True when the checkpoint already contains a finished Studio artifact."""
+    values = getattr(snapshot, "values", {}) or {}
+    return bool(values.get("refined_content"))
+
+
+async def _persist_studio_piece(
+    *,
+    writer_id: int,
+    take_id: int,
+    final_state: dict[str, Any],
+) -> dict[str, Any]:
+    """Materialize the final Studio graph state into product DB entities."""
+    from backend.db import session_repository  # noqa: E402
+    from backend.db.database import async_session  # noqa: E402
+
+    content = final_state.get("refined_content", "")
+    title = final_state.get("title", "Untitled")
+    brief = final_state.get("brief", {}) or {}
+    piece_format = brief.get("format", "other")
+    word_count = final_state.get("word_count")
+    if word_count is None:
+        word_count = len(content.split()) if content.strip() else 0
+
+    async with async_session() as db:
+        piece = WriterPiece(
+            writer_id=writer_id,
+            title=title,
+            content=content,
+            format=piece_format,
+            word_count=word_count,
+        )
+        db.add(piece)
+        await db.flush()
+        await db.refresh(piece)
+
+        await session_repository.update_take_content(db, take_id, content, title)
+        await db.commit()
+
+    return {
+        "id": piece.id,
+        "title": title,
+        "content": content,
+        "format": piece_format,
+        "word_count": word_count,
+    }
+
+
 async def stream_studio_session(
     writer: Writer,
     brief: BriefResponse,
@@ -240,32 +327,31 @@ async def stream_studio_session(
 ) -> AsyncIterator[str | dict]:
     """Run the Studio writing pipeline for a brief and stream tokens.
 
-    Does NOT load or save chat history — each Studio session starts fresh.
+    Does NOT load or save chat history â€” each Studio session starts fresh.
 
     On the first call (session_id=None) a StudioSession is created and the
     session_id is yielded as {"session_started": {"session_id": N}} before
-    the pipeline starts. On subsequent calls the existing session is reused
-    and a new StudioTake is linked to it.
+    the pipeline starts. On subsequent calls the existing session is reused.
+    If a checkpoint is pending for that session, the current take is resumed.
+    Otherwise a new StudioTake is created for the next iteration.
 
     Yields:
       - dict: {"session_started": {"session_id": N}} (first call only)
-      - dict: phase events like {"phase": "outlining"}
+      - dict: phase / tool events
       - str: text token from the refine stream
       - dict: final piece event {"piece": {...}} after the stream ends
     """
     if not os.getenv("ANTHROPIC_API_KEY"):
         raise RuntimeError("ANTHROPIC_API_KEY environment variable is not set")
 
-    from agents.nodes.research_node import research_node_stream  # noqa: E402
-    from agents.nodes.writing_nodes import (  # noqa: E402
-        outline_node,
-        draft_node,
-        studio_refine_node_stream,
+    from agents.graphs.studio_graph import (  # noqa: E402
+        build_studio_graph,
+        open_studio_checkpointer,
     )
-    from backend.db.database import async_session  # noqa: E402
     from backend.db import session_repository  # noqa: E402
+    from backend.db.database import async_session  # noqa: E402
 
-    # --- Session + take bookkeeping (short-lived DB session before LLM calls) ---
+    # --- Session bookkeeping (short-lived DB session before graph execution) ---
     async with async_session() as db:
         if session_id is None:
             studio_session = await session_repository.create_session(
@@ -277,24 +363,7 @@ async def stream_studio_session(
             await db.commit()
             yield {"session_started": {"session_id": session_id}}
 
-        # Ownership check + 404 for supplied session_id
-        existing = await session_repository.get_session_with_takes(db, session_id)
-        if existing is None:
-            raise ValueError(f"Session {session_id} not found")
-        if existing.writer_id != writer.id:
-            raise PermissionError(f"Session {session_id} does not belong to this writer")
-        take_number = len(existing.takes) + 1
-
-        take = await session_repository.create_take(
-            db,
-            session_id=session_id,
-            take_number=take_number,
-            iteration_notes=iteration_notes,
-        )
-        take_id = take.id
-        await db.commit()
-
-    # Load latest identity (no DB session held during LLM calls)
+    # Load latest identity (no DB session held during graph execution)
     identity_row: WriterIdentity | None = None
     if writer.identities:
         identity_row = max(writer.identities, key=lambda i: i.version)
@@ -308,83 +377,71 @@ async def stream_studio_session(
     }
     identity_dict["purpose"] = writer.purpose
 
-    # Build the studio request from the brief.
-    # iteration_notes is kept separate from brief.notes (which is the original brief snapshot).
-    studio_request = f"Write a {brief.format} with tone: {brief.tone}."
-    if brief.word_limit:
-        studio_request += f" Word limit: {brief.word_limit}."
-    if brief.notes:
-        studio_request += f" Notes: {brief.notes}"
-    if iteration_notes:
-        studio_request += f" Producer notes for this take: {iteration_notes}"
+    async with open_studio_checkpointer() as checkpointer:
+        graph = build_studio_graph().compile(checkpointer=checkpointer)
+        config = {"configurable": {"thread_id": str(session_id)}}
+        snapshot = await graph.aget_state(config)
 
-    state: dict = {
-        "messages": [{"role": "user", "content": studio_request}],
-        "writer_id": str(writer.id),
-        "writer_name": writer.name,
-        "identity": identity_dict,
-        "constraints": identity_dict.get("constraints", {}),
-    }
+        input_state: dict[str, Any] | None = None
+        should_finalize_from_checkpoint = False
 
-    # Research phase: web search if the request needs current information
-    async for event in research_node_stream(state):
-        if "search_results" in event:
-            if event["search_results"]:
-                state["search_results"] = event["search_results"]
+        async with async_session() as db:
+            existing = await session_repository.get_session_with_takes(db, session_id)
+            if existing is None:
+                raise ValueError(f"Session {session_id} not found")
+            if existing.writer_id != writer.id:
+                raise PermissionError(f"Session {session_id} does not belong to this writer")
+
+            last_take = existing.takes[-1] if existing.takes else None
+            should_resume = _snapshot_has_pending_work(snapshot)
+            should_finalize_from_checkpoint = (
+                not should_resume
+                and last_take is not None
+                and not last_take.content
+                and _snapshot_has_piece_output(snapshot)
+            )
+
+            if should_resume:
+                if last_take is None or last_take.content:
+                    raise RuntimeError(
+                        f"Session {session_id} has checkpoint state to resume but no unfinished take"
+                    )
+                take_id = last_take.id
+            elif should_finalize_from_checkpoint:
+                take_id = last_take.id
+            else:
+                take_number = len(existing.takes) + 1
+                take = await session_repository.create_take(
+                    db,
+                    session_id=session_id,
+                    take_number=take_number,
+                    iteration_notes=iteration_notes,
+                )
+                take_id = take.id
+                await db.commit()
+                input_state = _build_studio_graph_input(
+                    writer=writer,
+                    brief=brief,
+                    identity=identity_dict,
+                    iteration_notes=iteration_notes,
+                    take_id=take.id,
+                    take_number=take.take_number,
+                )
+
+        if should_finalize_from_checkpoint:
+            final_state = dict(snapshot.values)
         else:
-            yield event  # forward tool_use / tool_result to SSE stream
+            async for chunk in graph.astream(input_state, config, stream_mode="custom"):
+                yield chunk
 
-    # Outline
-    yield {"phase": "outlining"}
-    outline_result = await outline_node(state)
-    state.update(outline_result)
+            final_state = dict((await graph.aget_state(config)).values)
 
-    # Draft
-    yield {"phase": "drafting"}
-    draft_result = await draft_node(state)
-    state.update(draft_result)
+        if not final_state.get("refined_content"):
+            raise RuntimeError("Studio graph completed without refined content to persist")
 
-    # Refine (streaming) — accumulate buffer while yielding tokens
-    yield {"phase": "refining"}
-    buffer = ""
-    async for token in studio_refine_node_stream(state):
-        buffer += token
-        yield token
-
-    # Parse title from buffer: ---TITLE: <title>---
-    title_pattern = re.compile(r"\n---TITLE:\s*(.+?)---\s*$", re.DOTALL)
-    match = title_pattern.search(buffer)
-    if match:
-        title = match.group(1).strip()
-        content = buffer[: match.start()].rstrip()
-    else:
-        title = "Untitled"
-        content = buffer
-
-    word_count = len(content.split()) if content.strip() else 0
-
-    # Save piece + update take in short-lived sessions (never hold DB during LLM calls)
-    async with async_session() as db:
-        piece = WriterPiece(
+        piece_payload = await _persist_studio_piece(
             writer_id=writer.id,
-            title=title,
-            content=content,
-            format=brief.format,
-            word_count=word_count,
+            take_id=take_id,
+            final_state=final_state,
         )
-        db.add(piece)
-        await db.flush()
-        await db.refresh(piece)
-
-        await session_repository.update_take_content(db, take_id, content, title)
-        await db.commit()
-
-    yield {
-        "piece": {
-            "id": piece.id,
-            "title": title,
-            "content": content,
-            "format": brief.format,
-            "word_count": word_count,
-        }
-    }
+        yield {"piece": piece_payload}

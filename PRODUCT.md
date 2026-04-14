@@ -1,8 +1,8 @@
 # YourWriter — Estado Funcional del Producto
 
 *Documento vivo. Se actualiza al final de cada sprint con lo que quedó funcional.*
-*Última actualización: 2026-04-13 — Sprint 6b Slice 2 frontend + integración visible Studio -> identidad.*
-*Próximo: Sprint 6b Slice 3 (checkpointer / resumibilidad técnica). Ver `SPRINT6B.md`.*
+*Última actualización: 2026-04-13 — Sprint 6b Slice 3 (checkpointer / resumibilidad técnica sin UI nueva).*
+*Próximo: Sprint 6b Slice 4 (sessions UI / retomar). Ver `SPRINT6B.md`.*
 
 ---
 
@@ -94,6 +94,11 @@ Cuando el usuario hace click en **"Finalizar sesión"**, el Studio no vuelve dir
 - Al volver al Writer Page aparece un banner claro confirmando si la sesión evolucionó al writer o si se cerró sin importar cambios.
 - La identidad refrescada y el EvolutionFeed vuelven a mostrar el efecto visible del loop Studio -> identidad.
 
+**Estado técnico post Slice 3:**
+- El pipeline del Studio ya persiste checkpoints en backend y puede reanudarse desde el último nodo completado.
+- Si el corte ocurre en un nodo streaming, ese nodo activo se reinicia al reanudar.
+- Todavía no existe UI dedicada para listar sesiones activas o elegir "Retomar"; eso queda para Slice 4.
+
 ### Identity Evolution via Chat ← Sprint 6a
 
 Cuando el usuario moldea al writer a través del chat — pide enfoques, refuerza rasgos, repite patrones de estilo — el sistema detecta esas señales y propone cambios graduales a la identidad.
@@ -124,7 +129,7 @@ El Studio usa `web_search_20250305` (herramienta built-in de Anthropic SDK ≥0.
 | Feature | Sprint |
 |---------|--------|
 | Refactor técnico del agent layer (LangChain 1.x, prompt caching, structured output, modelos en config) | Sprint Lang Refresh (próximo, sin impacto funcional) |
-| Session snapshot resumable (vía LangGraph checkpointer + Store) | Sprint 6b Slice 3 |
+| Sessions UI / retomar sesión visible para el usuario | Sprint 6b Slice 4 |
 | Writer initialization flow (GRRM-style) | Sprint 6b |
 | Tracing y evals automáticos del evolution pipeline (LangSmith + LLM-as-judge) | Sprint 6c |
 | Memory System (memoria episódica persistente, vía LangMem) | Sprint 7 |

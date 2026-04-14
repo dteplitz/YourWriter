@@ -1,133 +1,99 @@
 # YourWriter
 
-*El contexto personal, la forma de trabajo y el proceso de desarrollo están en `~/.claude/CLAUDE.md` (global). Este archivo es específico de YourWriter.*
+*El contexto personal, la forma de trabajo y el proceso general viven en `~/.claude/CLAUDE.md`. Este archivo guarda solo lo específico de YourWriter.*
 
----
-
-## Dónde vive cada tipo de instrucción
+## Dónde Vive Cada Cosa
 
 | Tipo | Archivo |
 |------|---------|
-| Quién es Damian, la relación, cómo colaborar | `~/.claude/CLAUDE.md` (global) |
-| Proceso de desarrollo, way of work, principios | `~/.claude/CLAUDE.md` (global) |
-| QA con Playwright | `~/.claude/CLAUDE.md` (global) |
-| Contexto del producto YourWriter | Este archivo |
-| Tech stack, module boundaries, key concepts | Este archivo |
-| Estado del proyecto, sprint actual | Este archivo |
-| Patrones de área (frontend/backend) | `.agents/frontend.md`, `.agents/backend.md` |
-| Estado funcional del producto | `PRODUCT.md` |
-| Estado técnico del producto | `ARCHITECTURE.md` |
-| Razonamiento de diseño | `LINEAGE.md` |
-| Terminología canónica del producto | `GLOSSARY.md` |
-| Decisiones, patterns y watch list del ecosistema Lang | `LANG_PLAYBOOK.md` |
+| Relación con Damian, forma de colaborar, proceso general, QA, git | `~/.claude/CLAUDE.md` (global) |
+| Proceso operativo del proyecto | `PROCESS.md` |
+| Estado funcional real | `PRODUCT.md` |
+| Estado técnico real | `ARCHITECTURE.md` |
+| Decisiones Lang/LangGraph/LangMem | `LANG_PLAYBOOK.md` |
+| Diseño / naming / racional | `LINEAGE.md` + `GLOSSARY.md` |
+| Patrones de área | `.agents/frontend.md`, `.agents/backend.md` |
+| Contexto mínimo de arranque de YourWriter | este archivo |
 
-**En el retro:** si aprendemos algo sobre la relación o el proceso → actualizar `~/.claude/CLAUDE.md`. Si aprendemos algo sobre YourWriter → actualizar este archivo o los docs vivos.
-
----
-
-## Nota para Claude — nueva sesión (YourWriter)
-
-No recordás nada de lo anterior sobre este proyecto. El contexto de quién es Damian y cómo trabajamos ya lo tenés del CLAUDE.md global. Esto es lo específico de YourWriter.
+## Arranque de sesión
 
 **Leer siempre al inicio:**
-1. `PRODUCT.md` — qué está construido funcionalmente
-2. Sprint actual: **Sprint 6b** → `SPRINT6B.md` *(actualizar esta línea cada sprint)*
+1. `PRODUCT.md` — estado funcional real
+2. Sprint actual: **Sprint 6b** → `SPRINT6B.md`
 
-**Leer según el task (no siempre):**
-- Decisiones Lang/LangGraph/LangMem → `LANG_PLAYBOOK.md`
-- Decisiones de diseño/UX/naming → `LINEAGE.md` + `GLOSSARY.md`
-- Estado técnico detallado → `ARCHITECTURE.md`
+**Leer según el task:**
+- `LANG_PLAYBOOK.md` — decisiones Lang/LangGraph/LangMem
+- `ARCHITECTURE.md` — estado técnico detallado
+- `LINEAGE.md` + `GLOSSARY.md` — decisiones de diseño/UX/naming
 
-**Diagnóstico al despertar — después de leer, decirle a Damian:**
-- Qué entendés con confianza
-- Qué gaps quedan (código no leído, incertidumbre sobre el estado actual)
-- Qué necesitás explorar antes de proponer
-Ser honesto, no performativo. Si los docs son suficientes, decirlo. Si no, decir qué falta.
+**Diagnóstico al despertar (después de leer):**
+- qué entendés con confianza
+- qué gaps quedan
+- qué código falta leer antes de proponer
 
-**El producto:** Escritores IA con personalidad, emociones y objetivos que evolucionan solos. La evolución autónoma via chat **ya está construida** (Sprint 6a) — los writers evolucionan cuando el usuario los moldea conversando.
+Ser honesto y no performativo.
 
-**El enfoque de diseño:** Dos espacios: Artist Profile (management del writer) y Studio (la sesión de grabación). Inspiración: Football Manager + producción musical. Ver `LINEAGE.md` para el razonamiento completo.
+## Qué es YourWriter
 
-**La app la corre Damian** — `bash dev.sh` desde el root (Docker Compose, requiere Docker Desktop). Frontend: 3000, backend: 8001.
+YourWriter es una plataforma multiusuario donde los usuarios crean escritores IA con personalidad, emociones y objetivos propios.
 
----
+Dos espacios canónicos:
+- **Artist Profile** — management del writer
+- **Studio** — sesión de escritura / grabación
 
-## Project Overview
-YourWriter es una plataforma multi-usuario donde los usuarios crean, customizan y evolucionan sus propios escritores IA.
+Inspiración de diseño: Football Manager + producción musical. Ver `LINEAGE.md` para el racional completo.
 
----
+La evolución autónoma via chat ya está construida (Sprint 6a).
 
-## GitHub
-Repo: `dteplitz/YourWriter` — usar GitHub MCP para PR reviews, crear PRs al cierre de sprint, explorar historial de archivos.
+## Cómo corre la app
 
-## Development Workflow
+Damian corre la app con `bash dev.sh` desde el root.
 
-### Proceso
-Seguir el proceso en `PROCESS.md`. El proceso general (sprint cycle, principios) está en `~/.claude/CLAUDE.md`.
+Puertos canónicos:
+- frontend: 3000
+- backend: 8001
 
-### Parallel Development
-- Definir shared contracts en `main` ANTES de lanzar agentes en paralelo
-- Si necesitás cambiar un contrato compartido (API schema, DB model, tipos), avisarle a Damian primero
+Requiere Docker Desktop.
 
-### QA — Environment Verification (YourWriter específico)
-- Confirmar URL/puerto canónico antes de QA (frontend: 3000, backend: 8001)
-- Si aparece `Could not validate credentials`: probar Logout → login antes de clasificar como bug
-- Si el estado inválido se limpia con Logout, tratarlo como issue de sesión expirada — no como bug de producto
+## Repo y docs vivos
 
-### Module Boundaries
-- `backend/` — FastAPI, routes, services, DB
-- `frontend/` — React 19, Vite, TypeScript
-- `agents/` — LangGraph pipelines
-- `shared/` — tipos y constantes compartidos
+- Repo GitHub: `dteplitz/YourWriter`
+- Proceso del proyecto: `PROCESS.md`
+- Estado funcional: `PRODUCT.md`
+- Estado técnico: `ARCHITECTURE.md`
+- Patrones de área: `.agents/frontend.md`, `.agents/backend.md`
 
-### Code Standards
-- Python: type hints, pydantic, async donde corresponda
-- TypeScript/React: functional components, typed props
-- Toda feature nueva necesita tests
-- Funciones pequeñas y enfocadas
+## Reglas de trabajo específicas
 
-### Area-Specific Patterns
-Ver los templates de agentes — son la fuente de verdad para patrones de área:
-- Frontend (CSS layout, TypeScript, design system, animaciones): `.agents/frontend.md`
-- Backend (sessions, auth, service pattern, server restart): `.agents/backend.md`
+- Seguir `PROCESS.md`
+- Si necesitás cambiar shared contracts, avisarle a Damian primero
+- Para QA: confirmar siempre puertos/URL; si aparece `Could not validate credentials`, probar logout/login antes de clasificar bug
+- Definir shared contracts en `main` antes de paralelizar trabajo que dependa de ellos
 
----
-
-## Tech Stack
-- **Backend**: Python 3.11+, FastAPI, uvicorn
-- **Frontend**: React 19, Vite, TypeScript
-- **Database**: PostgreSQL (local + prod) via SQLAlchemy async + asyncpg. SQLite solo en tests.
-- **Agent Layer**: LangChain, LangGraph, Anthropic SDK
-- **Auth**: Email/password simple (JWT)
-
----
-
-## Key Concepts
-- **Writer**: agente IA con purpose, personality, emotions, memories, topics, constraints, lifelong objectives
-- **Artist Profile**: el espacio de management del writer — character sheet, traits, emotions, constraints, objectives.
-- **Studio**: la sesión de grabación — Brief Setup → sesión activa → artefacto → iteración → discografía.
-- **Identity Evolution**: los writers evolucionan autónomamente después de cada sesión (Sprint 6a)
-- **User Constraints**: reglas en plain English parseadas a config estructurada
-- **Discografía / Pieces Library**: las piezas escritas en el Studio se acumulan como una discografía del writer
-
----
+Module boundaries:
+- `backend/` — FastAPI, servicios, DB
+- `frontend/` — React/Vite/TypeScript
+- `agents/` — grafos y nodos LangGraph
+- `shared/` — tipos/constantes compartidos
 
 ## Project Status
 
-Sprints 1–Lang Refresh ✅ — historial completo en `ARCHITECTURE.md`.
+Sprints 1–Lang Refresh ✅ — historial en `ARCHITECTURE.md`.
 
-- **Sprint 6b** 🔄 Session entity + Post-sesión import. Plan en `SPRINT6B.md`. Slice 0 ✅ (Postgres local, PR #11), Slice 1 ✅ (PR #12, `StudioSession`/`StudioTake`, session_repository, stream plumbing), Slice 2 ✅ (post-session import flow backend + frontend + QA). Próximo: Slice 3 (checkpointer).
-- **Sprint 6b.5** ⏳ Writer initialization flow conversacional (reemplaza CreateWriterModal).
+- **Sprint 6b** 🔄 Session entity + Post-sesión import. Slice 0 ✅, Slice 1 ✅, Slice 2 ✅, Slice 3 ✅ (`StateGraph` real + `AsyncPostgresSaver` + resume técnico). Próximo: Slice 4 (sessions UI / retomar).
+- **Sprint 6b.5** ⏳ Writer initialization flow conversacional.
 - **Sprint 6c** ⏳ LangSmith + evals del evolution pipeline.
-- **Sprint 7** ⏳ Memory System (LangMem — episodic, semantic, procedural).
-- **Sprint 8** ⏳ UX/UI dedicado + Polish + Agent Visualization.
-- **Sprint 9+** ⏳ Studio v2 deep agent, context editing, async subagents. Ver `LANG_PLAYBOOK.md`.
+- **Sprint 7** ⏳ Memory System con LangMem.
 
----
+## Mantenimiento de este archivo
 
-## Reglas de mantenimiento de este archivo
+- Cap: 5KB
+- No guardar “contexto de la última sesión” acá
+- Learnings van a memoria/doc vivo correspondiente, no duplicados acá
 
-- **Cap: 5KB.** Checkearlo en cada retro. Si supera el límite, extraer antes de mergear.
-- **Session context nunca acá.** El contexto de la última sesión va en el sprint doc, no acá.
-- **Learnings: solo en memoria.** Nunca duplicar acá lo que ya está en un archivo de memoria.
-- **Al cierre de sprint:** comprimir la entrada del sprint a 1 línea en Project Status.
+## Retro / Actualización
+
+- Si cambia el producto visible o la UX, actualizar `PRODUCT.md`
+- Si cambia la arquitectura, módulos, endpoints o modelos, actualizar `ARCHITECTURE.md`
+- Si cambia el racional de diseño o el lenguaje del producto, actualizar `LINEAGE.md` y/o `GLOSSARY.md`
+- Si el aprendizaje es sobre proceso general, QA, git o colaboración, va al `~/.claude/CLAUDE.md` global

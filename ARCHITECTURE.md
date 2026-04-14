@@ -1,7 +1,7 @@
 # YourWriter — Arquitectura Técnica
 
 *Documento vivo. Se actualiza al final de cada sprint con lo que fue construido o modificado.*
-*Última actualización: 2026-04-13 — Sprint 6b Slice 2 completo (post-sesión import backend + frontend + integración visible) documentado. Para el contexto completo de decisiones sobre LangChain/LangGraph/LangMem, ver `LANG_PLAYBOOK.md`.*
+*Última actualización: 2026-04-13 — Sprint 6b Slice 3 completo (Studio en `StateGraph` real + `AsyncPostgresSaver` + resume técnico) documentado. Para el contexto completo de decisiones sobre LangChain/LangGraph/LangMem, ver `LANG_PLAYBOOK.md`.*
 
 ---
 
@@ -98,7 +98,8 @@ yourwriter/
 │
 ├── agents/
 │   ├── graphs/
-│   │   └── evolution_graph.py # Grafo de evolución 2-stage: detect → compute → apply (Sprint 6a)
+│   │   ├── evolution_graph.py # Grafo de evolución 2-stage: detect → compute → apply (Sprint 6a)
+│   │   └── studio_graph.py    # Grafo real del Studio: research → outline → draft → refine + checkpointer (Sprint 6b Slice 3)
 │   ├── nodes/
 │   │   ├── chat_node.py     # ChatAnthropic + cache_control (Lang Refresh)
 │   │   ├── writing_nodes.py # outline_node, draft_node, refine_node, studio_refine_node_stream — todos en ChatAnthropic (Lang Refresh)
@@ -213,6 +214,11 @@ created_at
 
 Slice 2 backend no agregó columnas nuevas de identidad: el origen del import post-sesión queda trazado hoy en `evolution_logs.reason` con el prefijo `[post_session_import session_id=...]`.
 
+**Checkpoint tables (LangGraph) ← Sprint 6b Slice 3**
+- No viven en SQLAlchemy models del producto.
+- Las crea/migra `setup_studio_checkpointer()` en startup cuando el runtime usa PostgreSQL.
+- Guardan el state interno del Studio graph y su historial de checkpoints por `thread_id = StudioSession.id`.
+
 ### Patrón crítico de sesiones SQLite
 
 SQLite serializa writes. Si una sesión queda abierta durante una LLM call (10–30s), bloquea toda la base.
@@ -312,14 +318,19 @@ Los eventos de evolución se emiten **después** del `done`. El stream permanece
 | `stream_writer_agent()` | Chat conversacional (siempre — sin keyword detection) | `POST /chat/{id}/message/stream` |
 | `stream_studio_session()` | Studio con research → outline → draft → refine | `POST /chat/{id}/studio/stream` |
 
-**`stream_studio_session()` NO usa el grafo compilado.** Orquesta manualmente:
+**`stream_studio_session()` ahora es un wrapper delgado sobre `studio_graph`.**
 1. Si no viene `session_id`, crea `StudioSession` y yielda `session_started`
-2. Crea `StudioTake` para la llamada actual y persiste `iteration_notes`
-3. `research_node_stream()` → yielda tool_use/tool_result, acumula search_results
-4. `outline_node(state)` → genera outline
-5. `draft_node(state)` → genera draft
-6. `studio_refine_node_stream(state)` → streama tokens + parsea `---TITLE: <title>---` al final
-7. Guarda `WriterPiece` + actualiza `StudioTake` en sesión corta → yielda evento `{"piece": {...}}`
+2. Compila `build_studio_graph()` con `AsyncPostgresSaver`
+3. Usa `thread_id = str(session_id)` para leer el checkpoint actual
+4. Si hay trabajo pendiente, reanuda el take actual con `graph.astream(None, config, stream_mode="custom")`
+5. Si no hay trabajo pendiente, crea un `StudioTake` nuevo y arranca el graph con input state nuevo
+6. Los nodos del graph emiten eventos custom (`phase`, `tool_use`, `tool_result`, `token`) vía `get_stream_writer()`
+7. Al terminar, el service persiste `WriterPiece` + actualiza `StudioTake`
+
+**Semántica de resume (Slice 3):**
+- Reanuda desde el último nodo completado
+- Si el corte ocurre durante un nodo streaming (`research`/`refine`), ese nodo se reinicia al reanudar
+- Si el graph ya terminó pero faltó persistir `WriterPiece`, el service materializa la pieza desde el checkpoint final sin rerun del pipeline
 
 ### Session import flow ← Sprint 6b Slice 2 backend
 
@@ -336,7 +347,11 @@ Los eventos de evolución se emiten **después** del `done`. El stream permanece
 
 ### Grafos compilados activos
 
-Después del Sprint Lang Refresh, el único grafo compilado y ejecutado en runtime es **`evolution_graph`**. El antiguo `writer_graph.py` (que compilaba un detect_intent + write pipeline) fue **borrado en Lang Refresh**: nunca se llamaba — `stream_writer_agent()` invoca `chat_node` directamente desde Sprint UX, y `stream_studio_session()` orquesta los nodos manualmente. Ver A4 en `LANG_PLAYBOOK.md`.
+Grafos compilados activos en runtime:
+- **`evolution_graph`** — pipeline 2-stage de identidad vía chat
+- **`studio_graph`** — pipeline del Studio con checkpointer persistente
+
+El antiguo `writer_graph.py` (que compilaba un detect_intent + write pipeline) fue borrado en Lang Refresh porque nunca se llamaba. Ver A4 en `LANG_PLAYBOOK.md`.
 
 ### Evolution Pipeline (Sprint 6a)
 
