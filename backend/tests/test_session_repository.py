@@ -141,3 +141,33 @@ async def test_advance_lifecycle_complete_to_imported(db):
 async def test_get_session_with_takes_returns_none_for_missing(db):
     result = await session_repository.get_session_with_takes(db, session_id=9999)
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_list_sessions_for_writer_excludes_abandoned_by_default(db):
+    writer_id = db.info["writer_id"]
+    active_session = await session_repository.create_session(db, writer_id, {"format": "essay"})
+    abandoned_session = await session_repository.create_session(db, writer_id, {"format": "poem"})
+    await db.flush()
+
+    await session_repository.advance_lifecycle(db, abandoned_session.id, "abandoned")
+    await db.commit()
+
+    sessions = await session_repository.list_sessions_for_writer(db, writer_id)
+
+    assert [session.id for session in sessions] == [active_session.id]
+
+
+@pytest.mark.asyncio
+async def test_get_owned_session_with_takes_includes_writer_relationship(db):
+    writer_id = db.info["writer_id"]
+    studio_session = await session_repository.create_session(db, writer_id, {"format": "essay"})
+    await session_repository.create_take(db, studio_session.id, take_number=1)
+    await db.commit()
+
+    loaded = await session_repository.get_owned_session_with_takes(db, studio_session.id)
+
+    assert loaded is not None
+    assert loaded.writer is not None
+    assert loaded.writer.id == writer_id
+    assert len(loaded.takes) == 1

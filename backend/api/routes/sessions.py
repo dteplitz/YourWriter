@@ -2,14 +2,23 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.auth import get_current_user
+from backend.db.database import get_db
 from backend.db.models import User
 from backend.schemas.session import (
+    SessionAbandonResponse,
+    SessionDetailResponse,
     SessionImportProposalResponse,
     SessionImportRequest,
     SessionImportResponse,
     SessionSkipResponse,
+)
+from backend.services.session_query_service import (
+    SessionQueryError,
+    abandon_session,
+    get_session_detail,
 )
 from backend.services.session_import_service import (
     SessionImportError,
@@ -22,6 +31,40 @@ from backend.services.session_import_service import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+
+@router.get("/{session_id}", response_model=SessionDetailResponse)
+async def get_session_detail_endpoint(
+    session_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> SessionDetailResponse:
+    try:
+        return await get_session_detail(
+            db,
+            session_id=session_id,
+            user_id=current_user.id,
+        )
+    except SessionQueryError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+
+
+@router.post("/{session_id}/abandon", response_model=SessionAbandonResponse)
+async def abandon_session_endpoint(
+    session_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> SessionAbandonResponse:
+    try:
+        response = await abandon_session(
+            db,
+            session_id=session_id,
+            user_id=current_user.id,
+        )
+        await db.commit()
+        return response
+    except SessionQueryError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
 
 
 @router.post("/{session_id}/import-proposal", response_model=SessionImportProposalResponse)

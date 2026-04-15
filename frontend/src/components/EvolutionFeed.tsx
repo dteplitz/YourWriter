@@ -5,6 +5,7 @@ import * as api from '../api/client';
 interface EvolutionFeedProps {
   writerId: string;
   autoEvolutionEvent?: EvolutionDetectedEvent | null;
+  onOpenSession?: (sessionId: number) => void;
 }
 
 interface AutoEvolutionFeedEntry {
@@ -15,7 +16,11 @@ interface AutoEvolutionFeedEntry {
   timestamp: string;
 }
 
-export default function EvolutionFeed({ writerId, autoEvolutionEvent }: EvolutionFeedProps) {
+export default function EvolutionFeed({
+  writerId,
+  autoEvolutionEvent,
+  onOpenSession,
+}: EvolutionFeedProps) {
   const [entries, setEntries] = useState<EvolutionEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [autoEntries, setAutoEntries] = useState<AutoEvolutionFeedEntry[]>([]);
@@ -117,6 +122,15 @@ export default function EvolutionFeed({ writerId, autoEvolutionEvent }: Evolutio
             <div className="evolution-reason">
               <span className="evolution-label">Reason:</span> {entry.reason}
             </div>
+            {entry.source_session_id && onOpenSession && (
+              <button
+                type="button"
+                className="evolution-session-chip"
+                onClick={() => onOpenSession(entry.source_session_id!)}
+              >
+                Sesion #{entry.source_session_id}
+              </button>
+            )}
           </div>
         ))}
       </div>

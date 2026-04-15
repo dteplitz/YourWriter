@@ -13,6 +13,7 @@ class EvolutionLogResponse(BaseModel):
     old_value: str | None
     new_value: str | None
     reason: str | None
+    source_session_id: int | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

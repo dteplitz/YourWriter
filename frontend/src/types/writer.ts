@@ -30,6 +30,17 @@ export interface WriterCreate {
   style_description?: string;
 }
 
+export interface WriterInitializationPreview {
+  summary: string;
+  name: string;
+  purpose: string;
+  personality: Record<string, string>;
+  emotions: Record<string, number>;
+  topics: string[];
+  constraints: Record<string, string>;
+  lifelong_objectives: string[];
+}
+
 export interface WriterWithIdentity extends Writer {
   identity: Identity | null;
 }

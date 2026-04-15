@@ -7,9 +7,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.auth.auth import get_current_user
 from backend.db.database import get_db
 from backend.db.models import User, WriterPiece
+from backend.schemas.session import WriterSessionsSummaryResponse
 from backend.schemas.studio import PieceResponse
 from backend.schemas.writer import WriterCreate, WriterResponse, WriterUpdate, WriterWithIdentity
 from backend.schemas.identity import IdentityResponse
+from backend.schemas.writer_initialization import (
+    WriterCreateFromPreviewRequest,
+    WriterInitializationPreviewResponse,
+    WriterInitializationRequest,
+)
+from backend.services.session_query_service import get_writer_sessions_summary
+from backend.services.writer_initialization_service import (
+    create_writer_from_preview,
+    generate_writer_preview,
+)
 from backend.services.writer_service import (
     create_writer,
     delete_writer,
@@ -44,6 +55,31 @@ async def create_writer_endpoint(
         name=body.name,
         purpose=body.purpose,
         style_description=body.style_description,
+    )
+    return WriterResponse.model_validate(writer)
+
+
+@router.post("/initialize-preview", response_model=WriterInitializationPreviewResponse)
+async def initialize_writer_preview_endpoint(
+    body: WriterInitializationRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> WriterInitializationPreviewResponse:
+    """Generate an initial writer profile preview from free-text description."""
+    _ = current_user
+    return await generate_writer_preview(body.description)
+
+
+@router.post("/from-preview", response_model=WriterResponse, status_code=201)
+async def create_writer_from_preview_endpoint(
+    body: WriterCreateFromPreviewRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> WriterResponse:
+    """Create a new writer from a previously generated initialization preview."""
+    writer = await create_writer_from_preview(
+        db,
+        user_id=current_user.id,
+        body=body,
     )
     return WriterResponse.model_validate(writer)
 
@@ -103,6 +139,19 @@ async def list_pieces(
     )
     pieces = result.scalars().all()
     return [PieceResponse.model_validate(p) for p in pieces]
+
+
+@router.get("/{writer_id}/sessions/summary", response_model=WriterSessionsSummaryResponse)
+async def get_writer_sessions_summary_endpoint(
+    writer_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> WriterSessionsSummaryResponse:
+    return await get_writer_sessions_summary(
+        db,
+        writer_id=writer_id,
+        user_id=current_user.id,
+    )
 
 
 @router.get("/{writer_id}/pieces/{piece_id}", response_model=PieceResponse)

@@ -1,7 +1,7 @@
 # YourWriter — Arquitectura Técnica
 
 *Documento vivo. Se actualiza al final de cada sprint con lo que fue construido o modificado.*
-*Última actualización: 2026-04-13 — Sprint 6b Slice 3 completo (Studio en `StateGraph` real + `AsyncPostgresSaver` + resume técnico) documentado. Para el contexto completo de decisiones sobre LangChain/LangGraph/LangMem, ver `LANG_PLAYBOOK.md`.*
+*Última actualización: 2026-04-15 — Sprint 6b.5 completo (writer initialization flow simple + preview estructurado con Lang). Para el contexto completo de decisiones sobre LangChain/LangGraph/LangMem, ver `LANG_PLAYBOOK.md`.*
 
 ---
 
@@ -75,24 +75,28 @@ yourwriter/
 │   │   ├── ...              # Pydantic schemas existentes
 │   │   ├── studio.py        # BriefRequest, BriefResponse, PieceResponse (Sprint 5)
 │   │   ├── evolution.py     # EvolutionEvent, EvolutionResult Pydantic schemas (Sprint 6a)
-│   │   └── session.py       # Import proposal/import/skip contracts (Sprint 6b Slice 2 backend)
-│   └── services/            # Business logic (writer_service, chat_service, user_service, import flow)
-│       ├── evolution_service.py     # run_evolution() + shared identity persistence helper
-│       └── session_import_service.py # load session context → proposal → import → skip
+│   │   └── session.py       # Session summary/detail + import flow contracts (Sprint 6b)
+│   │   └── writer_initialization.py  # Free-text init request/preview/create contracts (Sprint 6b.5)
+│   └── services/            # Business logic (writer_service, chat_service, user_service, import flow, session queries)
+│       ├── evolution_service.py      # run_evolution() + shared identity persistence helper + source_session_id derivation
+│       ├── session_import_service.py # load session context → proposal → import → skip
+│       └── session_query_service.py  # summary/detail/resume-mode/abandon for Studio sessions (Slice 4)
+│       └── writer_initialization_service.py # Lang structured-output preview + create-from-preview (Sprint 6b.5)
 │
 ├── frontend/src/
 │   ├── api/
 │   │   └── client.ts        # Todas las llamadas al backend (única fuente de verdad)
 │   ├── components/          # Componentes reutilizables
-│   ├── pages/               # Páginas (LoginPage, DashboardPage, WriterPage, StudioPage, SessionImportPage)
+│   ├── pages/               # Páginas (LoginPage, DashboardPage, WriterInitializationPage, WriterPage, StudioPage, SessionImportPage)
 │   ├── stores/              # Zustand stores (authStore, writerStore)
 │   ├── types/               # TypeScript types
 │   │   ├── index.ts         # Re-exports
-│   │   ├── writer.ts        # Writer, Identity, Constraints
+│   │   ├── writer.ts        # Writer, Identity, Constraints, WriterInitializationPreview
 │   │   └── studio.ts        # Brief + Studio SSE types + post-session import contracts
 │   ├── index.css            # Design system: variables CSS, base styles, WriterPage layout
 │   ├── config-panel.css     # Estilos del Artist Profile / character sheet
 │   ├── writing.css          # Estilos del Studio (Sprint 5)
+│   ├── writer-init.css      # Estilos del flow de creacion simple (Sprint 6b.5)
 │   ├── session.css          # Estilos de la sesión activa (Sprint 5)
 │   └── import-flow.css      # Estilos del post-session import flow (Sprint 6b Slice 2)
 │
@@ -109,7 +113,7 @@ yourwriter/
 │   │   ├── memory.py        # Dict en memoria (no persiste a DB)
 │   │   └── constraints.py
 │   ├── prompts/
-│   │   └── system.py        # System prompts (incluye BRIEF_GENERATION_PROMPT, STUDIO_REFINE_PROMPT, SESSION_IMPORT_PROMPT)
+│   │   └── system.py        # System prompts (incluye BRIEF_GENERATION_PROMPT, STUDIO_REFINE_PROMPT, SESSION_IMPORT_PROMPT, WRITER_INITIALIZATION_PROMPT)
 │   └── evolution/
 │       ├── identity.py      # Dataclass Identity con to_dict/from_dict/to_prompt_string
 │       ├── diff.py          # Lógica de diff de identidad
@@ -209,10 +213,11 @@ take_number     int
 iteration_notes nullable
 content         text
 title           nullable
+word_count      int
 created_at
 ```
 
-Slice 2 backend no agregó columnas nuevas de identidad: el origen del import post-sesión queda trazado hoy en `evolution_logs.reason` con el prefijo `[post_session_import session_id=...]`.
+Slice 2 backend no agregó columnas nuevas de identidad: el origen del import post-sesión queda trazado hoy en `evolution_logs.reason` con el prefijo `[post_session_import session_id=...]`. Slice 4 deriva de ahí `source_session_id` para exponerlo al frontend sin abrir migraciones.
 
 **Checkpoint tables (LangGraph) ← Sprint 6b Slice 3**
 - No viven en SQLAlchemy models del producto.
@@ -244,7 +249,10 @@ POST /auth/login        body: {email, password}   → {access_token}
 ```
 GET    /writers                          → list[WriterResponse]
 POST   /writers      body: WriterCreate  → WriterResponse (201)
+POST   /writers/initialize-preview       → WriterInitializationPreviewResponse   ← Sprint 6b.5
+POST   /writers/from-preview             → WriterResponse (201)                  ← Sprint 6b.5
 GET    /writers/{id}                     → WriterWithIdentity
+GET    /writers/{id}/sessions/summary    → WriterSessionsSummaryResponse   ← Slice 4
 PUT    /writers/{id} body: WriterUpdate  → WriterResponse
 DELETE /writers/{id}                     → 204
 ```
@@ -274,8 +282,10 @@ POST /chat/{id}/brief            body: {message}  → BriefResponse             
 POST /chat/{id}/studio/stream    body: {brief, session_id?, iteration_notes?} → SSE stream
 ```
 
-### Sessions — `/api/sessions` ← Sprint 6b Slice 2 backend
+### Sessions — `/api/sessions` ← Sprint 6b Slice 2/4 backend
 ```
+GET  /sessions/{id}                             → SessionDetailResponse
+POST /sessions/{id}/abandon                     → SessionAbandonResponse
 POST /sessions/{id}/import-proposal              → SessionImportProposalResponse
 POST /sessions/{id}/import        body: {changes, reasoning} → SessionImportResponse
 POST /sessions/{id}/skip                          → SessionSkipResponse
@@ -345,6 +355,21 @@ Los eventos de evolución se emiten **después** del `done`. El stream permanece
   - `SessionImportPage` llama `POST /sessions/{id}/import-proposal`, renderiza la propuesta con checkboxes y deja importar un subset o skipear explícitamente.
   - `WriterPage` consume `location.state.sessionImportFeedback` para mostrar un banner transitorio al volver desde el import flow.
 
+### Sessions summary / resume UX ← Sprint 6b Slice 4
+
+- `session_query_service.py` concentra la lectura de sesiones para UI:
+  - `get_writer_sessions_summary(...)`
+  - `get_session_detail(...)`
+  - `abandon_session(...)`
+- El summary elige un `highlight` para la UI con prioridad `active > complete`.
+- `history` excluye `abandoned` por default y trae solo el shape necesario para card + lista.
+- `SessionDetailResponse` expone `resume_mode`:
+  - `checkpoint` si el checkpointer tiene trabajo pendiente para `thread_id = session.id`
+  - `artifact` si el runtime no tiene trabajo pendiente pero el último take ya fue materializado
+- Esto evita un bug sutil de Slice 4: sin `resume_mode`, abrir una sesión activa ya materializada desde `WriterPage` podía crear un take nuevo por accidente. Con `artifact`, el frontend abre el último documento existente sin autoarrancar otra iteración.
+- `POST /sessions/{id}/abandon` implementa la semántica de `Empezar nueva` desde el gate del Studio.
+- `GET /api/evolution/{writer_id}` ahora incluye `source_session_id` derivado server-side para que `EvolutionFeed` linkee a la sesión origen sin regex en React.
+
 ### Grafos compilados activos
 
 Grafos compilados activos en runtime:
@@ -412,6 +437,7 @@ A partir del segundo turno del mismo writer, Anthropic reusa el KV-cache del pre
 
 ### Rutas
 ```
+/writers/new        → WriterInitializationPage (protegida)  ← Sprint 6b.5
 /login              → LoginPage
 /                   → DashboardPage (protegida)
 /writer/:id         → WriterPage (protegida)
@@ -449,20 +475,32 @@ Estilos por área en archivos separados (no en `index.css`):
 
 | Componente | Qué hace |
 |-----------|---------|
+| `WriterInitializationPage` | Pantalla dedicada de creacion: descripcion libre -> preview generado -> crear writer |
+| `CreateWriterModal` | Modal legacy; ya no monta en el flujo principal de creacion |
 | `ConfigPanel` | Artist Profile — character sheet editable (EmotionBar, TraitBadge, ConstraintCard) |
 | `EmotionBar` | Barra de progreso animada para valores 0–1 (muestra como %) |
 | `TraitBadge` | Badge para traits/topics/objectives con tier colors |
 | `ConstraintCard` | Tarjeta individual para cada constraint |
 | `ChatPanel` | Chat con SSE streaming, fases del pipeline, botón "Studio →" |
-| `EvolutionFeed` | Log de cambios de identidad |
+| `EvolutionFeed` | Log de cambios de identidad; en imports post-sesión muestra chip/link a la sesión origen |
 | `WriterCard` | Card en el dashboard |
-| `CreateWriterModal` | Modal de creación de writer |
-| `BriefSetup` | Brief en 4 estados: input → loading → preview → clarifying. Header con nombre+purpose del writer. |
-| `SessionExperience` | Sesión activa: stream + phase pills con `LOADING_TIPS` rotativos (cada 4s) + tool use pill + artifact + navegación al import flow al finalizar |
+| `BriefSetup` | Brief en 4 estados: input → loading → preview → clarifying. Header con nombre+purpose del writer y notice contextual opcional (Slice 4). |
+| `SessionStatusCard` | Card compacta de estado de sesión en WriterPage (`active` / `complete`) con CTAs de retomar o revisar import |
+| `SessionHistory` | Historial expandible de sesiones separado de la discografía; carga detalle on-demand |
+| `SessionExperience` | Sesión activa: stream + phase pills con `LOADING_TIPS` rotativos (cada 4s) + tool use pill + artifact + navegación al import flow al finalizar. En Slice 4 también puede abrir un artefacto previo sin autoarrancar stream |
 | `SessionImportPage` | Pantalla separada de revisión post-sesión: carga proposal, renderiza checkboxes, CTA Importar / Skipear, maneja propuesta vacía |
 | `WritingArtifact` | Documento final: título, formato badge, copy, Iterar/Finalizar |
 | `IterationInput` | Textarea de notas del productor, relanza el pipeline |
 | `PiecesLibrary` | Discografía del writer — lista expandible con fechas en español |
+
+### WriterInitializationPage — free-text setup
+
+- ruta dedicada: `/writers/new`
+- estado local + `sessionStorage` para preservar descripcion y preview
+- preview generado via Lang `with_structured_output(...)`
+- confirmacion final crea `Writer` + `WriterIdentity version=1`
+- `purpose`, `personality`, `emotions` y `constraints` son la capa prioritaria del setup inicial
+- `topics` y `lifelong_objectives` quedan minimizados; `memories` arrancan vacias
 
 ### WriterPage — layout scroll
 
@@ -479,12 +517,31 @@ writer-page (overflow-y: auto)
     ConfigPanel (héroe a ancho completo)
   writer-below-fold (height: calc(100vh - 108px))
     writer-chat-col (flex: 1)   ← ChatPanel
-    writer-evolution-col (300px) ← EvolutionFeed
+    writer-sidebar-col (320px)
+      → SessionStatusCard (solo si hay `active`/`complete`)
+      → EvolutionFeed
+  writer-sessions-shell (debajo del fold)
+    → SessionHistory (solo si existe historia real)
 ```
 
 `WriterPage` usa un scroll event listener sobre `pageRef` para detectar cuando el hero scroll fuera de vista y activar el `writer-rpg-strip`. `ConfigPanel` recibe `onIdentityLoaded` callback para que WriterPage tenga los datos de identidad disponibles para el strip.
 
 `WriterPage` también escucha `location.state.sessionImportFeedback` al volver desde el import flow. Copia ese estado a un banner local dismissible y luego limpia el `location.state` con `replace` para que el mensaje no reaparezca en refresh/back.
+
+**Jerarquía visual de Slice 4:**
+- El chat sigue siendo la superficie principal del `Artist Profile`.
+- El estado de sesión es visible pero compacto.
+- `active` pesa más que `complete`.
+- Si el writer no tiene sesiones, no se renderiza ningún bloque nuevo.
+
+### StudioPage — gate de retomar
+
+- Si el summary indica una sesión `active`, `StudioPage` no entra directo al Brief Setup: muestra una puerta de decisión con `Retomar sesión` / `Empezar nueva`.
+- `Empezar nueva` llama `POST /sessions/{id}/abandon`, refresca el summary y habilita un brief nuevo.
+- Si el summary indica `complete` pero no `active`, `BriefSetup` renderiza un aviso suave con CTA `Revisar import`.
+- Si la navegación viene desde `WriterPage` con `resumeSessionId`, `StudioPage` carga el detalle:
+  - `resume_mode = checkpoint` → abre `SessionExperience` con `autoStart`
+  - `resume_mode = artifact` → abre directamente el último artefacto y sus controles de iteración, sin crear un take nuevo
 
 **Scroll fix (Sprint UX):** Tres partes necesarias para que el scroll arranque en la posición correcta:
 1. `overflow-anchor: none` en `.writer-page` — deshabilita el scroll anchoring de Chrome. Sin esto, cuando ConfigPanel crece al cargar la identidad (~400ms), Chrome re-scrollea automáticamente para mantener el chat visible, bypaseando JavaScript.

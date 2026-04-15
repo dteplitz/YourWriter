@@ -1,15 +1,23 @@
-import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import ChatPanel from '../components/ChatPanel';
 import ConfigPanel from '../components/ConfigPanel';
 import EvolutionFeed from '../components/EvolutionFeed';
+import SessionHistory from '../components/SessionHistory';
+import SessionStatusCard from '../components/SessionStatusCard';
 import { useWriterStore } from '../stores/writerStore';
-import type { Identity, EvolutionDetectedEvent } from '../types';
-import type { SessionImportFeedback } from '../types/studio';
+import type {
+  EvolutionDetectedEvent,
+  Identity,
+  SessionDetailResponse,
+  SessionImportFeedback,
+  WriterSessionsSummaryResponse,
+} from '../types';
 import * as api from '../api/client';
 
 interface WriterPageLocationState {
   sessionImportFeedback?: SessionImportFeedback;
+  openSessionId?: number;
 }
 
 function summarizeImportedChanges(feedback: SessionImportFeedback | null): string {
@@ -29,6 +37,11 @@ function summarizeImportedChanges(feedback: SessionImportFeedback | null): strin
   return summary;
 }
 
+const EMPTY_SESSION_SUMMARY: WriterSessionsSummaryResponse = {
+  highlight: null,
+  history: [],
+};
+
 export default function WriterPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -39,23 +52,26 @@ export default function WriterPage() {
   const [heroVisible, setHeroVisible] = useState(true);
   const [pendingEvolution, setPendingEvolution] = useState<EvolutionDetectedEvent | null>(null);
   const [sessionImportFeedback, setSessionImportFeedback] = useState<SessionImportFeedback | null>(null);
+  const [sessionsSummary, setSessionsSummary] = useState<WriterSessionsSummaryResponse>(EMPTY_SESSION_SUMMARY);
+  const [sessionDetailsById, setSessionDetailsById] = useState<Record<number, SessionDetailResponse>>({});
+  const [expandedSessionId, setExpandedSessionId] = useState<number | null>(null);
+  const [loadingDetailIds, setLoadingDetailIds] = useState<number[]>([]);
+  const [pendingOpenSessionId, setPendingOpenSessionId] = useState<number | null>(null);
   const heroRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
+  const historyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!id) {
       navigate('/');
       return;
     }
-    loadWriter(id);
+    void loadWriter(id);
     return () => {
       selectWriter(null);
     };
   }, [id]);
 
-  // Watch when the config hero scrolls out of view (scroll-event based, more predictable)
-  // Also resets scroll to top when the writer-page div first mounts (loading → false).
-  // The ref is null during loading state, so we reset here where pageRef is guaranteed valid.
   useEffect(() => {
     const page = pageRef.current;
     if (!page) return;
@@ -63,7 +79,6 @@ export default function WriterPage() {
     const check = () => {
       const hero = heroRef.current;
       if (!hero) return;
-      // heroBottom < 150: hero has scrolled above the visible content area (both headers ~118px)
       setHeroVisible(hero.getBoundingClientRect().bottom > 150);
     };
     page.addEventListener('scroll', check, { passive: true });
@@ -73,23 +88,99 @@ export default function WriterPage() {
 
   useEffect(() => {
     const state = location.state as WriterPageLocationState | null;
-    if (!state?.sessionImportFeedback) return;
+    if (!state) return;
 
-    setSessionImportFeedback(state.sessionImportFeedback);
+    if (state.sessionImportFeedback) {
+      setSessionImportFeedback(state.sessionImportFeedback);
+      if (id) {
+        void loadSessions(id);
+      }
+    }
+
+    if (state.openSessionId) {
+      setPendingOpenSessionId(state.openSessionId);
+    }
+
     navigate(location.pathname, { replace: true, state: null });
   }, [location.key]);
 
+  useEffect(() => {
+    if (!pendingOpenSessionId) return;
+    void openSessionDetail(pendingOpenSessionId, { forceOpen: true, scroll: true });
+    setPendingOpenSessionId(null);
+  }, [pendingOpenSessionId]);
+
   const loadWriter = async (writerId: string) => {
     setLoading(true);
+    setSessionsSummary(EMPTY_SESSION_SUMMARY);
+    setSessionDetailsById({});
+    setExpandedSessionId(null);
     try {
       const writer = await api.getWriter(writerId);
       selectWriter(writer);
+      await loadSessions(writerId);
     } catch {
       navigate('/');
     } finally {
       setLoading(false);
     }
   };
+
+  const loadSessions = async (writerId: string) => {
+    try {
+      const summary = await api.getWriterSessionsSummary(writerId);
+      setSessionsSummary(summary);
+    } catch {
+      setSessionsSummary(EMPTY_SESSION_SUMMARY);
+    }
+  };
+
+  const openSessionDetail = async (
+    sessionId: number,
+    options: { forceOpen?: boolean; scroll?: boolean } = {},
+  ) => {
+    if (!options.forceOpen && expandedSessionId === sessionId) {
+      setExpandedSessionId(null);
+      return;
+    }
+
+    setExpandedSessionId(sessionId);
+
+    if (options.scroll) {
+      historyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    if (sessionDetailsById[sessionId] || loadingDetailIds.includes(sessionId)) {
+      return;
+    }
+
+    setLoadingDetailIds((current) => [...current, sessionId]);
+    try {
+      const detail = await api.getSessionDetail(sessionId);
+      setSessionDetailsById((current) => ({ ...current, [sessionId]: detail }));
+    } finally {
+      setLoadingDetailIds((current) => current.filter((value) => value !== sessionId));
+    }
+  };
+
+  const handleResumeSession = (sessionId: number) => {
+    navigate('/studio/' + id, {
+      state: {
+        resumeSessionId: sessionId,
+      },
+    });
+  };
+
+  const handleReviewImport = (sessionId: number) => {
+    navigate(`/studio/${id}/import/${sessionId}`);
+  };
+
+  const highlight =
+    sessionsSummary.highlight &&
+    (sessionsSummary.highlight.lifecycle === 'active' ||
+      sessionsSummary.highlight.lifecycle === 'complete')
+      ? sessionsSummary.highlight
+      : null;
 
   if (loading || !selectedWriter || !id) {
     return <div className="writer-page-loading">Loading writer...</div>;
@@ -98,7 +189,7 @@ export default function WriterPage() {
   const showRpgStrip = !heroVisible && identity !== null;
   const emotions = identity
     ? Object.entries(identity.emotions)
-        .filter(([, v]) => typeof v === 'number')
+        .filter(([, value]) => typeof value === 'number')
         .slice(0, 5)
     : [];
   const traits = identity ? Object.entries(identity.personality).slice(0, 3) : [];
@@ -106,7 +197,6 @@ export default function WriterPage() {
 
   return (
     <div ref={pageRef} className="writer-page">
-      {/* Sticky header — always visible, gains RPG strip when hero scrolls out */}
       <div className="writer-sticky-header">
         <div className="writer-page-header">
           <button className="btn btn-secondary" onClick={() => navigate('/')}>
@@ -119,7 +209,6 @@ export default function WriterPage() {
           <div style={{ minWidth: '80px' }} />
         </div>
 
-        {/* RPG stats strip — slides in when config hero is out of view */}
         <div className={`writer-rpg-strip${showRpgStrip ? ' writer-rpg-strip--visible' : ''}`}>
           {emotions.map(([key, value]) => {
             const pct = Math.round(Math.min(1, value as number) * 100);
@@ -166,7 +255,6 @@ export default function WriterPage() {
         </div>
       )}
 
-      {/* Hero: Artist Profile */}
       <div ref={heroRef} className="writer-hero">
         <ConfigPanel
           writerId={id}
@@ -180,7 +268,6 @@ export default function WriterPage() {
         />
       </div>
 
-      {/* Below the fold: Chat + Evolution */}
       <div className="writer-below-fold">
         <div className="writer-chat-col">
           <ChatPanel
@@ -188,15 +275,50 @@ export default function WriterPage() {
             onEnterStudio={() => navigate('/studio/' + id)}
             onEvolution={(event) => {
               setPendingEvolution(event);
-              // Reload identity from server to reflect the evolved state
               api.getIdentity(id).then(setIdentity).catch(() => {});
             }}
           />
         </div>
-        <div className="writer-evolution-col">
-          <EvolutionFeed writerId={id} autoEvolutionEvent={pendingEvolution} />
+
+        <div className="writer-sidebar-col">
+          {highlight && (
+            <SessionStatusCard
+              session={highlight}
+              onResume={handleResumeSession}
+              onReviewImport={handleReviewImport}
+              onViewSession={(sessionId) => {
+                void openSessionDetail(sessionId, { forceOpen: true, scroll: true });
+              }}
+            />
+          )}
+
+          <div className="writer-evolution-col">
+            <EvolutionFeed
+              writerId={id}
+              autoEvolutionEvent={pendingEvolution}
+              onOpenSession={(sessionId) => {
+                void openSessionDetail(sessionId, { forceOpen: true, scroll: true });
+              }}
+            />
+          </div>
         </div>
       </div>
+
+      {sessionsSummary.history.length > 0 && (
+        <div ref={historyRef} className="writer-session-history-shell">
+          <SessionHistory
+            history={sessionsSummary.history}
+            detailsById={sessionDetailsById}
+            loadingDetailIds={loadingDetailIds}
+            expandedSessionId={expandedSessionId}
+            onToggleSession={(sessionId) => {
+              void openSessionDetail(sessionId);
+            }}
+            onResume={handleResumeSession}
+            onReviewImport={handleReviewImport}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -80,8 +80,8 @@ Module boundaries:
 
 Sprints 1–Lang Refresh ✅ — historial en `ARCHITECTURE.md`.
 
-- **Sprint 6b** 🔄 Session entity + Post-sesión import. Slice 0 ✅, Slice 1 ✅, Slice 2 ✅, Slice 3 ✅ (`StateGraph` real + `AsyncPostgresSaver` + resume técnico). Próximo: Slice 4 (sessions UI / retomar).
-- **Sprint 6b.5** ⏳ Writer initialization flow conversacional.
+- **Sprint 6b** ✅ Session entity + Post-sesion import. Slice 0 ✅, Slice 1 ✅, Slice 2 ✅, Slice 3 ✅ (`StateGraph` real + `AsyncPostgresSaver` + resume tecnico), Slice 4 ✅ (sessions UI / retomar).
+- **Sprint 6b.5** ✅ Writer initialization flow simple: descripcion libre -> preview generado con Lang -> creacion final del writer.
 - **Sprint 6c** ⏳ LangSmith + evals del evolution pipeline.
 - **Sprint 7** ⏳ Memory System con LangMem.
 

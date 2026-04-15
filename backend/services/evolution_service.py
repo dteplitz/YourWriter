@@ -9,6 +9,7 @@ Two responsibilities:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,8 @@ from sqlalchemy import select
 
 from agents.evolution.result import EvolutionResult
 from backend.db.models import WriterIdentity, EvolutionLog
+
+_POST_SESSION_IMPORT_PATTERN = re.compile(r"\[post_session_import session_id=(\d+)\]")
 
 
 async def run_evolution(
@@ -102,6 +105,16 @@ def _compose_log_reason(reason: str, reason_prefix: str | None = None) -> str:
     if reason_prefix:
         return reason_prefix
     return reason
+
+
+def extract_source_session_id(reason: str | None) -> int | None:
+    """Return the post-session import session id embedded in a reason prefix, if present."""
+    if not reason:
+        return None
+    match = _POST_SESSION_IMPORT_PATTERN.search(reason)
+    if not match:
+        return None
+    return int(match.group(1))
 
 
 async def persist_identity_changes(

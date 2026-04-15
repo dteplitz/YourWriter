@@ -4,6 +4,7 @@ import type {
   RegisterRequest,
   Writer,
   WriterCreate,
+  WriterInitializationPreview,
   ChatMessage,
   Identity,
   Constraints,
@@ -13,8 +14,11 @@ import type {
 import type {
   Brief,
   Piece,
+  SessionAbandonResponse,
+  SessionDetailResponse,
   ToolUseEvent,
   ToolResultEvent,
+  WriterSessionsSummaryResponse,
   SessionImportProposalResponse,
   SessionImportRequest,
   SessionImportResponse,
@@ -79,6 +83,26 @@ export async function createWriter(data: WriterCreate): Promise<Writer> {
   const response = await fetchWithAuth('/writers', {
     method: 'POST',
     body: JSON.stringify(data),
+  });
+  return response.json();
+}
+
+export async function initializeWriterPreview(
+  description: string
+): Promise<WriterInitializationPreview> {
+  const response = await fetchWithAuth('/writers/initialize-preview', {
+    method: 'POST',
+    body: JSON.stringify({ description }),
+  });
+  return response.json();
+}
+
+export async function createWriterFromPreview(
+  preview: WriterInitializationPreview
+): Promise<Writer> {
+  const response = await fetchWithAuth('/writers/from-preview', {
+    method: 'POST',
+    body: JSON.stringify(preview),
   });
   return response.json();
 }
@@ -244,6 +268,29 @@ export async function sendBrief(
 
 export async function getPieces(writerId: string): Promise<Piece[]> {
   const response = await fetchWithAuth(`/writers/${writerId}/pieces`);
+  return response.json();
+}
+
+export async function getWriterSessionsSummary(
+  writerId: string
+): Promise<WriterSessionsSummaryResponse> {
+  const response = await fetchWithAuth(`/writers/${writerId}/sessions/summary`);
+  return response.json();
+}
+
+export async function getSessionDetail(
+  sessionId: number
+): Promise<SessionDetailResponse> {
+  const response = await fetchWithAuth(`/sessions/${sessionId}`);
+  return response.json();
+}
+
+export async function abandonSession(
+  sessionId: number
+): Promise<SessionAbandonResponse> {
+  const response = await fetchWithAuth(`/sessions/${sessionId}/abandon`, {
+    method: 'POST',
+  });
   return response.json();
 }
 
