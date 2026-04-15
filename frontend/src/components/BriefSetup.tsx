@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import type { Brief, Writer } from '../types';
 import * as api from '../api/client';
 
@@ -8,9 +9,10 @@ interface BriefSetupProps {
   writer: Writer;
   onStartSession: (brief: Brief) => void;
   onBack: () => void;
+  notice?: ReactNode;
 }
 
-export default function BriefSetup({ writer, onStartSession, onBack }: BriefSetupProps) {
+export default function BriefSetup({ writer, onStartSession, onBack, notice }: BriefSetupProps) {
   const [briefState, setBriefState] = useState<BriefState>('input');
   const [message, setMessage] = useState('');
   const [clarificationAnswer, setClarificationAnswer] = useState('');
@@ -140,6 +142,7 @@ export default function BriefSetup({ writer, onStartSession, onBack }: BriefSetu
   return (
     <div className="brief-setup">
       <div className="brief-setup-inner">
+        {notice}
         <div className="brief-writer-header">
           <span className="brief-writer-name">{writer.name}</span>
           {writer.purpose && (

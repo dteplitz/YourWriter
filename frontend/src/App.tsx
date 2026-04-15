@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage';
 import WriterPage from './pages/WriterPage';
 import StudioPage from './pages/StudioPage';
 import SessionImportPage from './pages/SessionImportPage';
+import WriterInitializationPage from './pages/WriterInitializationPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
@@ -26,6 +27,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/writers/new"
+            element={
+              <ProtectedRoute>
+                <WriterInitializationPage />
               </ProtectedRoute>
             }
           />

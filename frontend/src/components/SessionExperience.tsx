@@ -25,20 +25,25 @@ const LOADING_TIPS = [
 export default function SessionExperience({
   writerId,
   brief,
+  initialSessionId,
+  initialPiece = null,
+  autoStart = true,
   onPieceSaved,
   onSessionEnd,
 }: SessionExperienceProps) {
-  const [sessionState, setSessionState] = useState<SessionState>('streaming');
+  const [sessionState, setSessionState] = useState<SessionState>(
+    autoStart ? 'streaming' : 'artifact',
+  );
   const [streamedText, setStreamedText] = useState('');
   const [currentPhase, setCurrentPhase] = useState<string | null>(null);
   const [activeToolUse, setActiveToolUse] = useState<ToolUseEvent | null>(null);
-  const [currentPiece, setCurrentPiece] = useState<Piece | null>(null);
+  const [currentPiece, setCurrentPiece] = useState<Piece | null>(initialPiece);
   const [error, setError] = useState<string | null>(null);
   const [tipIndex, setTipIndex] = useState(0);
   const streamedTextRef = useRef('');
-  const hasLaunchedRef = useRef(false);
+  const hasLaunchedRef = useRef(!autoStart);
   const pieceReceivedRef = useRef(false);
-  const sessionIdRef = useRef<number | null>(null);
+  const sessionIdRef = useRef<number | null>(initialSessionId ?? null);
 
   useEffect(() => {
     if (hasLaunchedRef.current) return;

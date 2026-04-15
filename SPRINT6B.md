@@ -25,7 +25,7 @@ Tres motivos profundos. La resumibilidad técnica es el cuarto pero **no es el d
 
 ## Out of scope
 
-- **Writer initialization flow** — separado a Sprint 6b.5 para no inflar el sprint. Reusará el Store del checkpointer que monta este sprint.
+- **Writer initialization flow** — separado a Sprint 6b.5 para no inflar el sprint. Finalmente se resolvio aparte como flujo simple de descripcion libre + preview estructurado con Lang, sin Store en esta primera iteracion.
 - **Importación automática post-sesión** — solo importación explícita por ahora. Más control del usuario, mejor data para evals, menos magia opaca.
 - **LangMem episodic memory** — Sprint 7. Este sprint solo crea los episodios; consumirlos es trabajo de 7.
 - **LangSmith setup + evals** — Sprint 6c. Este sprint crea los datos sobre los que 6c va a trabajar.
@@ -337,6 +337,24 @@ Si viene `session_id`, validar ownership contra el writer en una sesión DB cort
 
 **Objetivo:** resumibilidad técnica del pipeline + base para Sprint 7 (LangMem necesita el Store que viene con el checkpointer).
 
+**Estado:** ✅ implementado y verificado técnicamente (2026-04-13).
+
+**Lo que quedó implementado:**
+- `agents/graphs/studio_graph.py` nuevo con `StudioState` y pipeline `research → outline → draft → refine` como `StateGraph` real
+- `stream_studio_session()` refactorizado a wrapper delgado sobre `graph.astream(...)`
+- `AsyncPostgresSaver` integrado en runtime y `setup()` ejecutado en startup de la app
+- `thread_id = StudioSession.id` como puente único entre producto y LangGraph
+- contrato SSE preservado (`session_started`, `phase`, `tool_use`, `tool_result`, `token`, `piece`, `done`)
+- semántica de resume cerrada: reanuda desde el último nodo completado; si se corta en `research` o `refine`, reinicia ese nodo activo
+- caso cubierto adicionalmente: si el grafo ya terminó pero faltó persistir `WriterPiece`, el service materializa la pieza desde el checkpoint final sin rerun del pipeline
+
+**Verificación hecha en este thread:**
+- tests backend verdes (`pytest backend/tests -q`)
+- tests nuevos del graph validando stream custom + resume (`backend/tests/test_studio_graph.py`)
+- prueba directa con `AsyncPostgresSaver` real contra el Postgres del compose:
+  - interrupción a mitad de `refine` → checkpoint con `next = ('refine',)`
+  - resume sobre el mismo `thread_id` → reinicio de `refine` y estado final correcto (`title`, `refined_content`)
+
 **⚠️ Decisión grande pendiente — leer antes de planificar:**
 
 > Hoy `stream_studio_session` **no usa un grafo compilado**. Orquesta nodos manualmente (research → outline → draft → refine como llamadas Python sucesivas). El checkpointer de LangGraph **solo funciona sobre grafos compilados**. Para meter checkpointer hay que **construir el writing graph como `StateGraph` real**.
@@ -369,18 +387,42 @@ Si viene `session_id`, validar ownership contra el writer en una sesión DB cort
 
 ### Slice 4 — UI: retomar take + lista de sesiones
 
-**Objetivo:** descubribilidad. Sin esto, los Slices 1-3 son invisibles para el usuario.
+**Objetivo:** hacer visible en producto que la sesión de Studio es un objeto real y persistente, sin desplazar al chat como superficie principal del Artist Profile.
 
-**Lo que sí está claro:**
-- Componente "Sesiones" en el Artist Profile — lista de sesiones del writer con `lifecycle`, número de takes, link a la pieza si fue importada
-- "Retomar / Empezar nueva" al entrar al Studio si hay sesión activa para este writer
-- `EvolutionFeed` entries linkeadas a su sesión origen (parte vino en Slice 2)
+**Decisiones funcionales cerradas en refinement conjunto:**
+- `Chat` sigue siendo la superficie principal del `WriterPage`.
+- `Sesiones` vive separado de `Discografía`: una sesión es el evento de Studio; la discografía es el historial de piezas.
+- Si el writer no tiene historia de Studio, no se muestra bloque de sesiones.
+- Si existe una sesión `active` o `complete`, aparece una card compacta de estado en el `WriterPage`.
+- `active` tiene prioridad visual y CTA principal `Retomar sesión`.
+- `complete` queda un escalón abajo y prioriza `Revisar import`.
+- Entrar al Studio con una sesión `active` muestra una puerta fuerte `Retomar sesión / Empezar nueva`.
+- Entrar al Studio con una sesión `complete` pero no `active` muestra un aviso suave sobre el Brief Setup.
+- `Empezar nueva` abandona explícitamente la sesión `active` anterior.
+- `abandoned` queda fuera del historial visible por default en este slice.
 
-**Open questions a resolver al inicio del planning de Slice 4:**
+**Implementado:**
+- Backend light:
+  - `GET /writers/{writer_id}/sessions/summary`
+  - `GET /sessions/{session_id}`
+  - `POST /sessions/{session_id}/abandon`
+  - `source_session_id` derivado en el evolution log sin migración de DB
+- Frontend:
+  - `WriterPage` con card compacta de estado + historial de sesiones separado de la discografía
+  - `StudioPage` con gate fuerte para `active` y aviso suave para `complete`
+  - `EvolutionFeed` con chip/link a sesión origen en imports post-sesión
+- Resume UX:
+  - si hay checkpoint pendiente, `Retomar sesión` reanuda el runtime
+  - si el último take ya estaba materializado, `Retomar sesión` abre el último artefacto sin crear un take nuevo
 
-1. **¿"Sesiones" como vista separada o tab dentro de la Discografía existente?** Una sesión puede tener varios takes pero solo algunos (o ninguno) son piezas exportadas. Son entidades distintas pero relacionadas.
-2. **¿"Retomar" como modal blocking al entrar al Studio o como banner inline en el BriefSetup?**
-3. **¿Sesiones `abandoned` aparecen en la lista?** *Voto preliminar: filtrar `abandoned` por default, mostrar con un toggle.*
+**Validación:**
+- Tests backend verdes (`pytest backend/tests -q`)
+- Tests frontend verdes (`npm test`) y build verde (`npm run build`)
+- QA manual end-to-end sobre la app levantada local:
+  - card `active` visible en Writer Page
+  - gate fuerte visible al entrar al Studio con sesión activa
+  - resume directo al último artefacto cuando la sesión activa ya tenía un take terminado
+  - card `complete` y aviso suave visibles para revisar import pendiente
 
 **PR:** `feat/sprint-6b-slice-4-sessions-ui`.
 
@@ -436,41 +478,16 @@ El schema definitivo (con `lifecycle` en lugar de `status`, valores reducidos, y
 
 ---
 
-## Estado de ejecución (2026-04-13)
+## Estado de ejecución (2026-04-14)
 
-### Slice 0 ✅ — mergeado a main (PR #11)
-- Postgres local en docker-compose, volume pg_data, .env.example, docs actualizados
-- `.gitattributes` con `*.sh eol=lf` (fix CRLF en Windows)
+### Slice 0 ✅ — Postgres local
+- runtime local/prod unificado sobre PostgreSQL
+- tests siguen en SQLite
 
-### Slice 1 ✅ — PR #12 abierto, pendiente merge
-- `StudioSession` + `StudioTake` en DB, `session_repository.py` con lifecycle guarded
-- `stream_studio_session` crea sesión en primer call, yield `session_started`, crea take por call
-- `iteration_notes` separado de `brief.notes` (brief snapshot preservado)
-- Frontend: `sessionIdRef` persiste `session_id` entre takes
-- 24/24 tests verdes, tsc limpio, QA manual OK
-- `PiecesLibrary` confirmado como huérfano — scope Slice 4, no blocker
-
-### Próxima sesión — QA + commit + PR de Slice 2
-
-**Estado:** todo el código de Slice 2 está en el working tree sin commitear, sobre el branch `feat/sprint-6b-slice-1-session-entity`. Tests 32/32 verdes, tsc limpio. Falta QA manual del import flow y commit/PR.
-
-**Checklist de QA:**
-1. `bash dev.sh` — confirmar que levanta sin errores
-2. Login → crear/seleccionar writer → Studio → configurar brief → escribir un take → "Iterar" con notas → segundo take → "Finalizar sesión"
-3. Verificar que navega a `/studio/:writerId/import/:sessionId`
-4. Ver propuesta del LLM con checkboxes — deseleccionar alguno → "Importar"
-5. Verificar que vuelve al Artist Profile con banner de feedback
-6. Verificar que `ConfigPanel` muestra la identidad actualizada
-7. Repetir el flujo pero con "Skipear" en lugar de "Importar"
-8. Flujo de propuesta vacía: si el LLM no propone nada, debe aparecer el estado "Sin aprendizaje durable" con botón "Continuar"
-
-**Antes de commitear:**
-- Descartar `PLAN_SPRINT6B_SLICE2.md` y `PLAN_SPRINT6B_SLICE3.md` (son artefactos de planificación, el plan vive en SPRINT6B.md)
-- Revisar si hay dead code o imports huérfanos
-
-**Estructura del commit/PR:**
-- Commitear todo como Slice 2 sobre el branch actual
-- El PR #12 cubre Slice 1+2 juntos (el sprint lo prevé así: "Slice 1 + 2 cerrados como un PR único antes de meter 3+4")
+### Slice 1 ✅ — Session entity
+- `StudioSession` / `StudioTake` persistidos
+- `session_id` mantenido entre takes
+- `iteration_notes` separado del brief original
 
 ### Slice 2 — fase 1 backend ✅ (2026-04-13)
 - Router nuevo `backend/api/routes/sessions.py` con `POST /sessions/{id}/import-proposal`, `POST /sessions/{id}/import`, `POST /sessions/{id}/skip`
@@ -493,8 +510,24 @@ El schema definitivo (con `lifecycle` en lugar de `status`, valores reducidos, y
 - Tests frontend verdes (`npm test`) y build frontend verde (`npm run build`)
 - QA manual end-to-end desde UI: **OK en localhost**. Verificado con Playwright headless sobre la app levantada manualmente: registro, creación de writer, sesión de Studio, import parcial y skip explícito
 
-### Próximo inmediato: Slice 3 — checkpointer
+### Slice 3 ✅ — checkpointer
+- `studio_graph.py` nuevo con `StudioState` y `StateGraph` compilado real
+- `AsyncPostgresSaver` en runtime + setup en startup
+- `stream_studio_session()` migrado a `graph.astream(...)` sin romper el SSE existente
+- resume técnico verificado por tests y con saver real contra Postgres del compose
 
-**Fuera de este thread:**
-- QA manual end-to-end real en navegador del flow completo
-- trabajo de checkpointer / resumibilidad técnica
+### Slice 4 ✅ — sessions UI / retomar
+- `WriterPage` mantiene al chat como superficie principal y agrega estado/historial de sesiones sin mezclarlo con la discografía
+- `StudioPage` resuelve `active` con gate fuerte y `complete` con aviso suave
+- `POST /sessions/{id}/abandon` implementa la decisión de `Empezar nueva`
+- `EvolutionFeed` muestra la sesión origen de imports post-sesión
+- QA manual end-to-end validado sobre app local rebuildada
+
+### Sprint 6b.5 ✅ — writer initialization flow simple
+- `Dashboard -> /writers/new -> descripcion libre -> preview generado con Lang -> crear writer`
+- `WriterInitializationPage` reemplaza al modal y usa `sessionStorage` para no perder draft/preview
+- el preview prioriza `purpose`, `personality`, `emotions` y `constraints`; `topics` y `lifelong_objectives` quedan como seeds secundarios
+- `memories` arrancan vacias; no se inventan en el setup inicial
+- QA manual end-to-end validado sobre app local rebuildada
+
+### Proximo inmediato: Sprint 6c — LangSmith + evals del evolution pipeline
